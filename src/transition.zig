@@ -5,6 +5,7 @@ pub fn Transition(guards: anytype, actions: anytype) type {
         pub const Guards = @TypeOf(guards);
         pub const Actions = @TypeOf(actions);
 
+        initial: bool = false,
         Source: type,
         Event: ?type = null,
         Destination: ?type = null,
@@ -22,6 +23,7 @@ pub fn Transition(guards: anytype, actions: anytype) type {
             }
 
             return .{
+                .initial = self.initial,
                 .Source = self.Source,
                 .Event = Event,
                 .Destination = self.Destination,
@@ -35,6 +37,7 @@ pub fn Transition(guards: anytype, actions: anytype) type {
             comptime assertGuards(new_guards);
 
             return .{
+                .initial = self.initial,
                 .Source = self.Source,
                 .Event = self.Event,
                 .Destination = self.Destination,
@@ -48,6 +51,7 @@ pub fn Transition(guards: anytype, actions: anytype) type {
             comptime assertActions(new_actions);
 
             return .{
+                .initial = self.initial,
                 .Source = self.Source,
                 .Event = self.Event,
                 .Destination = self.Destination,
@@ -65,6 +69,7 @@ pub fn Transition(guards: anytype, actions: anytype) type {
             }
 
             return .{
+                .initial = self.initial,
                 .Source = self.Source,
                 .Event = self.Event,
                 .Destination = Destination,
@@ -159,6 +164,13 @@ pub fn assertTransition(transition: anytype) void {
         ));
     }
 
+    if (!@hasField(trans_type, "initial")) {
+        @compileError("A transition has to has a `initial` field");
+    }
+    if (@TypeOf(transition.initial) != bool) {
+        @compileError("The `initial` field has to be `bool`");
+    }
+
     if (!@hasField(trans_type, "Source")) {
         @compileError("A transition has to has a `Source` field");
     }
@@ -188,11 +200,18 @@ pub fn assertTransition(transition: anytype) void {
     if (!@hasField(trans_type, "actions")) {
         @compileError("A transition has to has a `actions` field");
     }
-    assertGuards(transition.actions);
+    assertActions(transition.actions);
 }
 
-pub fn state(source: type) Transition(.{}, .{}) {
+pub fn state(Source: type) Transition(.{}, .{}) {
     return Transition(.{}, .{}){
-        .Source = source,
+        .Source = Source,
+    };
+}
+
+pub fn initial(Source: type) Transition(.{}, .{}) {
+    return Transition(.{}, .{}){
+        .initial = true,
+        .Source = Source,
     };
 }
