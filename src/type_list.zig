@@ -27,12 +27,12 @@ pub fn TypeList(current: anytype) type {
             return TypeList(@This().types ++ .{T});
         }
 
-        pub fn index(comptime T: type) usize {
+        pub fn index(comptime T: type) ?usize {
             inline for (0.., types) |i, t| {
                 if (t == T) return i;
             }
 
-            @compileError(std.fmt.comptimePrint("{} doesn't exist", .{T}));
+            return null;
         }
     };
 }
@@ -49,4 +49,5 @@ test "index shall return the index of the type appearing first" {
 
     try std.testing.expectEqual(0, type_list.index(u8));
     try std.testing.expectEqual(1, type_list.index(u16));
+    try std.testing.expectEqual(null, type_list.index(u32));
 }
