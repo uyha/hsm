@@ -32,44 +32,7 @@ pub fn Transition(guards: anytype, actions: anytype) type {
         }
 
         pub fn when(self: Self, comptime new_guards: anytype) Transition(self.guards ++ new_guards, self.actions) {
-            comptime {
-                switch (@typeInfo(@TypeOf(new_guards))) {
-                    .Struct => |t| {
-                        if (!t.is_tuple) {
-                            @compileError("A tuple of function pointers is expected");
-                        }
-
-                        for (new_guards) |guard| {
-                            if (@typeInfo(@TypeOf(guard)) != .Pointer) {
-                                @compileError(std.fmt.comptimePrint(
-                                    "A tuple of predicate pointers is expected, a {} is found inside it",
-                                    .{@TypeOf(guard)},
-                                ));
-                            }
-                            switch (@typeInfo(@TypeOf(guard.*))) {
-                                .Fn => |func| {
-                                    if (func.return_type != bool) {
-                                        @compileError(
-                                            std.fmt.comptimePrint(
-                                                "A predicate has to have its return type being a `bool`, the return type of the function is {} instead",
-                                                .{func.return_type.?},
-                                            ),
-                                        );
-                                    }
-                                },
-                                else => @compileError(std.fmt.comptimePrint(
-                                    "A tuple of predicate pointers is expected, a {} is found inside it",
-                                    .{@TypeOf(guard)},
-                                )),
-                            }
-                        }
-                    },
-                    else => |t| @compileError(std.fmt.comptimePrint(
-                        "A tuple of predicate pointers is expected, {} was provided",
-                        .{t},
-                    )),
-                }
-            }
+            comptime assertGuards(new_guards);
 
             return .{
                 .Source = self.Source,
@@ -82,35 +45,7 @@ pub fn Transition(guards: anytype, actions: anytype) type {
         }
 
         pub fn then_do(self: Self, comptime new_actions: anytype) Transition(self.guards, self.actions ++ new_actions) {
-            comptime {
-                switch (@typeInfo(@TypeOf(new_actions))) {
-                    .Struct => |t| {
-                        if (!t.is_tuple) {
-                            @compileError("A tuple of function pointers is expected");
-                        }
-
-                        for (new_actions) |action| {
-                            if (@typeInfo(@TypeOf(action)) != .Pointer) {
-                                @compileError(std.fmt.comptimePrint(
-                                    "A tuple of function pointers is expected, a {} is found inside it",
-                                    .{@TypeOf(action)},
-                                ));
-                            }
-                            switch (@typeInfo(@TypeOf(action.*))) {
-                                .Fn => {},
-                                else => @compileError(std.fmt.comptimePrint(
-                                    "A tuple of function pointers is expected, a {} is found inside it",
-                                    .{@TypeOf(action)},
-                                )),
-                            }
-                        }
-                    },
-                    else => |t| @compileError(std.fmt.comptimePrint(
-                        "A tuple of function pointers is expected, {} was provided",
-                        .{t},
-                    )),
-                }
-            }
+            comptime assertActions(new_actions);
 
             return .{
                 .Source = self.Source,
@@ -139,6 +74,79 @@ pub fn Transition(guards: anytype, actions: anytype) type {
             };
         }
     };
+}
+
+pub fn assertGuards(guards: anytype) void {
+    comptime {
+        switch (@typeInfo(@TypeOf(guards))) {
+            .Struct => |t| {
+                if (!t.is_tuple) {
+                    @compileError("A tuple of function pointers is expected");
+                }
+
+                for (guards) |guard| {
+                    if (@typeInfo(@TypeOf(guard)) != .Pointer) {
+                        @compileError(std.fmt.comptimePrint(
+                            "A tuple of predicate pointers is expected, a {} is found inside it",
+                            .{@TypeOf(guard)},
+                        ));
+                    }
+                    switch (@typeInfo(@TypeOf(guard.*))) {
+                        .Fn => |func| {
+                            if (func.return_type != bool) {
+                                @compileError(
+                                    std.fmt.comptimePrint(
+                                        "A predicate has to have its return type being a `bool`, the return type of the function is {} instead",
+                                        .{func.return_type.?},
+                                    ),
+                                );
+                            }
+                        },
+                        else => @compileError(std.fmt.comptimePrint(
+                            "A tuple of predicate pointers is expected, a {} is found inside it",
+                            .{@TypeOf(guard)},
+                        )),
+                    }
+                }
+            },
+            else => |t| @compileError(std.fmt.comptimePrint(
+                "A tuple of predicate pointers is expected, {} was provided",
+                .{t},
+            )),
+        }
+    }
+}
+
+pub fn assertActions(actions: anytype) void {
+    comptime {
+        switch (@typeInfo(@TypeOf(actions))) {
+            .Struct => |t| {
+                if (!t.is_tuple) {
+                    @compileError("A tuple of function pointers is expected");
+                }
+
+                for (actions) |action| {
+                    if (@typeInfo(@TypeOf(action)) != .Pointer) {
+                        @compileError(std.fmt.comptimePrint(
+                            "A tuple of function pointers is expected, a {} is found inside it",
+                            .{@TypeOf(action)},
+                        ));
+                    }
+                    switch (@typeInfo(@TypeOf(action.*))) {
+                        .Fn => {},
+                        else => @compileError(std.fmt.comptimePrint(
+                            "A tuple of function pointers is expected, a {} is found inside it",
+                            .{@TypeOf(action)},
+                        )),
+                    }
+                }
+            },
+            else => |t| @compileError(std.fmt.comptimePrint(
+                "A tuple of function pointers is expected, {} was provided",
+                .{t},
+            )),
+        }
+    }
 }
 
 pub fn state(source: type) Transition(.{}, .{}) {
