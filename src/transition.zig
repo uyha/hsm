@@ -149,6 +149,48 @@ pub fn assertActions(actions: anytype) void {
     }
 }
 
+pub fn assertTransition(transition: anytype) void {
+    const trans_type = @TypeOf(transition);
+    const trans_info = @typeInfo(trans_type);
+    if (trans_info != .Struct) {
+        @compileError(std.fmt.comptimePrint(
+            "A transition has to be struct, a {} is found instead",
+            .{@TypeOf(transition)},
+        ));
+    }
+
+    if (!@hasField(trans_type, "Source")) {
+        @compileError("A transition has to has a `Source` field");
+    }
+    if (@TypeOf(transition.Source) != type) {
+        @compileError("The `Source` field has to be `type`");
+    }
+
+    if (!@hasField(trans_type, "Event")) {
+        @compileError("A transition has to has a `Event` field");
+    }
+    if (@TypeOf(transition.Event) != ?type and @TypeOf(transition.Event) != type) {
+        @compileError("The `Event` field has to be `?type` or `type`");
+    }
+
+    if (!@hasField(trans_type, "Destination")) {
+        @compileError("A transition has to has a `Destination` field");
+    }
+    if (@TypeOf(transition.Destination) != ?type and @TypeOf(transition.Destination) != type) {
+        @compileError("The `Destination` field has to be `?type` or `type`");
+    }
+
+    if (!@hasField(trans_type, "guards")) {
+        @compileError("A transition has to has a `guards` field");
+    }
+    assertGuards(transition.guards);
+
+    if (!@hasField(trans_type, "actions")) {
+        @compileError("A transition has to has a `actions` field");
+    }
+    assertGuards(transition.actions);
+}
+
 pub fn state(source: type) Transition(.{}, .{}) {
     return Transition(.{}, .{}){
         .Source = source,
