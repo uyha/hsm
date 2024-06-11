@@ -20,8 +20,9 @@ pub fn sometime() bool {
     return Count.count % 2 == 0;
 }
 
-pub fn hello() void {
+pub fn hello(event: Event) void {
     std.debug.print("{s}:{} ({s})\n", .{ @src().file, @src().line, @src().fn_name });
+    std.debug.print("{}\n", .{event});
 }
 pub fn hello1() void {
     std.debug.print("{s}:{} ({s})\n", .{ @src().file, @src().line, @src().fn_name });
@@ -36,10 +37,18 @@ const Event = struct {
 
 pub fn main() !void {
     var sm = hsm.stateMachine(.{
-        .{ .initial = true, .src = u8, .event = Event, .actions = .{&hello} },
+        .{ .initial = true, .src = u8, .event = Event, .dst = u16, .actions = .{&hello} },
+        .{ .src = u16, .event = Event, .dst = u32, .actions = .{&hello1} },
+        .{ .src = u32, .event = Event, .dst = u8, .actions = .{&hello2} },
     });
 
     for (0..10) |i| {
         sm.process(Event{ .Source = @intCast(i) });
     }
+
+    // const Args = std.meta.ArgsTuple(@TypeOf((&hello1).*));
+    // const len = @typeInfo(Args).Struct.fields.len;
+    // const args: Args = if (len == 0) .{} else .{undefined} ** len;
+    //
+    // std.debug.print("{any}\n", .{args});
 }

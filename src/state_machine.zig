@@ -55,7 +55,7 @@ pub fn StateMachine(comptime transitions: anytype) type {
                             };
                             if (passed) {
                                 inline for (trans.actions) |action| {
-                                    self.invoke(action);
+                                    self.invoke(action, event);
                                 }
 
                                 if (@hasField(@TypeOf(trans), "dst")) {
@@ -77,8 +77,22 @@ pub fn StateMachine(comptime transitions: anytype) type {
             return States.index(T).?;
         }
 
-        fn invoke(_: *const Self, fnPtr: anytype) ReturnType(@typeInfo(@TypeOf(fnPtr))) {
-            return fnPtr();
+        fn invoke(_: *const Self, fnPtr: anytype, event: anytype)
+        // ReturnType(@typeInfo(@TypeOf(fnPtr)))
+        void {
+            const Fn = @typeInfo(@TypeOf(fnPtr)).Pointer.child;
+            const Args = std.meta.ArgsTuple(Fn);
+            const len = @typeInfo(Args).Struct.fields.len;
+
+            var args: Args = if (len == 0) .{} else .{undefined} ** len;
+
+            inline for (0.., @typeInfo(Args).Struct.fields) |i, Arg| {
+                if (comptime Arg.type == @TypeOf(event)) {
+                    args[i] = event;
+                }
+            }
+
+            return @call(.auto, fnPtr, args);
         }
     };
 }
