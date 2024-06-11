@@ -46,13 +46,13 @@ pub fn StateMachine(comptime transitions: anytype) type {
                     if (@hasField(Trans, "event")) {
                         if (@TypeOf(event) == trans.event) {
                             var passed = true;
-                            comptime if (@hasField(Trans, "guards")) {
-                                for (trans.guards) |guard| {
+                            if (comptime @hasField(Trans, "guards")) {
+                                inline for (trans.guards) |guard| {
                                     if (passed) {
-                                        passed = passed and self.invoke(guard);
+                                        passed = passed and self.invoke(guard, event);
                                     }
                                 }
-                            };
+                            }
                             if (passed) {
                                 inline for (trans.actions) |action| {
                                     self.invoke(action, event);
@@ -70,17 +70,23 @@ pub fn StateMachine(comptime transitions: anytype) type {
         }
 
         fn ReturnType(comptime info: std.builtin.Type) type {
-            return @typeInfo(info.Pointer.child).Fn.return_type.?;
+            return switch (info) {
+                .Pointer => |ptr| @typeInfo(ptr.child).Fn.return_type.?,
+                .Fn => |func| func.return_type.?,
+                else => unreachable,
+            };
         }
 
         fn getIndex(comptime T: type) usize {
             return States.index(T).?;
         }
 
-        fn invoke(_: *const Self, fnPtr: anytype, event: anytype)
-        // ReturnType(@typeInfo(@TypeOf(fnPtr)))
-        void {
-            const Fn = @typeInfo(@TypeOf(fnPtr)).Pointer.child;
+        fn invoke(_: *const Self, func: anytype, event: anytype) ReturnType(@typeInfo(@TypeOf(func))) {
+            const Fn = switch (@typeInfo(@TypeOf(func))) {
+                .Pointer => |ptr| ptr.child,
+                .Fn => @TypeOf(func),
+                else => unreachable,
+            };
             const Args = std.meta.ArgsTuple(Fn);
             const len = @typeInfo(Args).Struct.fields.len;
 
@@ -89,10 +95,12 @@ pub fn StateMachine(comptime transitions: anytype) type {
             inline for (0.., @typeInfo(Args).Struct.fields) |i, Arg| {
                 if (comptime Arg.type == @TypeOf(event)) {
                     args[i] = event;
+                } else {
+                    @compileError("No value available");
                 }
             }
 
-            return @call(.auto, fnPtr, args);
+            return @call(.auto, func, args);
         }
     };
 }

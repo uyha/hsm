@@ -1,35 +1,36 @@
 const std = @import("std");
 
+fn assertPredicate(Guard: type) void {
+    switch (@typeInfo(Guard)) {
+        .Fn => |func| {
+            if (func.return_type != bool) {
+                @compileError(
+                    std.fmt.comptimePrint(
+                        "A predicate has to have its return type being a `bool`, the return type of the function is {} instead",
+                        .{func.return_type.?},
+                    ),
+                );
+            }
+        },
+        else => @compileError(std.fmt.comptimePrint(
+            "A tuple of predicate / predicate pointers is expected, a {} is found inside it",
+            .{Guard},
+        )),
+    }
+}
+
 pub fn assertGuards(guards: anytype) void {
     comptime {
         switch (@typeInfo(@TypeOf(guards))) {
             .Struct => |t| {
                 if (!t.is_tuple) {
-                    @compileError("A tuple of function pointers is expected");
+                    @compileError("A tuple of predicates / predicate pointers is expected");
                 }
 
                 for (guards) |guard| {
-                    if (@typeInfo(@TypeOf(guard)) != .Pointer) {
-                        @compileError(std.fmt.comptimePrint(
-                            "A tuple of predicate pointers is expected, a {} is found inside it",
-                            .{@TypeOf(guard)},
-                        ));
-                    }
-                    switch (@typeInfo(@TypeOf(guard.*))) {
-                        .Fn => |func| {
-                            if (func.return_type != bool) {
-                                @compileError(
-                                    std.fmt.comptimePrint(
-                                        "A predicate has to have its return type being a `bool`, the return type of the function is {} instead",
-                                        .{func.return_type.?},
-                                    ),
-                                );
-                            }
-                        },
-                        else => @compileError(std.fmt.comptimePrint(
-                            "A tuple of predicate pointers is expected, a {} is found inside it",
-                            .{@TypeOf(guard)},
-                        )),
+                    switch (@typeInfo(@TypeOf(guard))) {
+                        .Pointer => |ptr| assertPredicate(ptr.child),
+                        else => assertPredicate(@TypeOf(guard)),
                     }
                 }
             },
@@ -41,32 +42,35 @@ pub fn assertGuards(guards: anytype) void {
     }
 }
 
+fn assertAction(Action: type) void {
+    comptime {
+        switch (@typeInfo(Action)) {
+            .Fn => {},
+            else => @compileError(std.fmt.comptimePrint(
+                "A tuple of functions / function pointers is expected, a {} is found inside it",
+                .{Action},
+            )),
+        }
+    }
+}
+
 pub fn assertActions(actions: anytype) void {
     comptime {
         switch (@typeInfo(@TypeOf(actions))) {
             .Struct => |t| {
                 if (!t.is_tuple) {
-                    @compileError("A tuple of function pointers is expected");
+                    @compileError("A tuple of functions / function pointers is expected");
                 }
 
                 for (actions) |action| {
-                    if (@typeInfo(@TypeOf(action)) != .Pointer) {
-                        @compileError(std.fmt.comptimePrint(
-                            "A tuple of function pointers is expected, a {} is found inside it",
-                            .{@TypeOf(action)},
-                        ));
-                    }
-                    switch (@typeInfo(@TypeOf(action.*))) {
-                        .Fn => {},
-                        else => @compileError(std.fmt.comptimePrint(
-                            "A tuple of function pointers is expected, a {} is found inside it",
-                            .{@TypeOf(action)},
-                        )),
+                    switch (@typeInfo(@TypeOf(action))) {
+                        .Pointer => |ptr| assertAction(ptr.child),
+                        else => assertAction(@TypeOf(action)),
                     }
                 }
             },
             else => |t| @compileError(std.fmt.comptimePrint(
-                "A tuple of function pointers is expected, {} was provided",
+                "A tuple of functions / function pointers is expected, {} was provided",
                 .{t},
             )),
         }
