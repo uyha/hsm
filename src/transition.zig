@@ -1,86 +1,5 @@
 const std = @import("std");
 
-pub fn Transition(guards: anytype, actions: anytype) type {
-    return struct {
-        pub const Guards = @TypeOf(guards);
-        pub const Actions = @TypeOf(actions);
-
-        initial: bool = false,
-        Source: type,
-        Event: ?type = null,
-        Destination: ?type = null,
-
-        guards: Guards = guards,
-        actions: Actions = actions,
-
-        const Self = @This();
-
-        pub fn with(self: Self, comptime Event: type) Self {
-            comptime {
-                if (self.Event != null) {
-                    @compileError("event is already set");
-                }
-            }
-
-            return .{
-                .initial = self.initial,
-                .Source = self.Source,
-                .Event = Event,
-                .Destination = self.Destination,
-
-                .guards = self.guards,
-                .actions = self.actions,
-            };
-        }
-
-        pub fn when(self: Self, comptime new_guards: anytype) Transition(self.guards ++ new_guards, self.actions) {
-            comptime assertGuards(new_guards);
-
-            return .{
-                .initial = self.initial,
-                .Source = self.Source,
-                .Event = self.Event,
-                .Destination = self.Destination,
-
-                .guards = self.guards ++ new_guards,
-                .actions = self.actions,
-            };
-        }
-
-        pub fn then_do(self: Self, comptime new_actions: anytype) Transition(self.guards, self.actions ++ new_actions) {
-            comptime assertActions(new_actions);
-
-            return .{
-                .initial = self.initial,
-                .Source = self.Source,
-                .Event = self.Event,
-                .Destination = self.Destination,
-
-                .guards = self.guards,
-                .actions = self.actions ++ new_actions,
-            };
-        }
-
-        pub fn then_enter(self: Self, comptime Destination: type) Self {
-            comptime {
-                if (self.Destination != null) {
-                    @compileError("event is already set");
-                }
-            }
-
-            return .{
-                .initial = self.initial,
-                .Source = self.Source,
-                .Event = self.Event,
-                .Destination = Destination,
-
-                .guards = self.guards,
-                .actions = self.actions,
-            };
-        }
-    };
-}
-
 pub fn assertGuards(guards: anytype) void {
     comptime {
         switch (@typeInfo(@TypeOf(guards))) {
@@ -157,6 +76,7 @@ pub fn assertActions(actions: anytype) void {
 pub fn assertTransition(transition: anytype) void {
     const trans_type = @TypeOf(transition);
     const trans_info = @typeInfo(trans_type);
+
     if (trans_info != .Struct) {
         @compileError(std.fmt.comptimePrint(
             "A transition has to be struct, a {} is found instead",
@@ -164,54 +84,30 @@ pub fn assertTransition(transition: anytype) void {
         ));
     }
 
-    if (!@hasField(trans_type, "initial")) {
-        @compileError("A transition has to has a `initial` field");
-    }
-    if (@TypeOf(transition.initial) != bool) {
+    if (@hasField(trans_type, "initial") and @TypeOf(transition.initial) != bool) {
         @compileError("The `initial` field has to be `bool`");
     }
 
-    if (!@hasField(trans_type, "Source")) {
-        @compileError("A transition has to has a `Source` field");
+    if (!@hasField(trans_type, "src")) {
+        @compileError("A transition has to has a `src` field");
     }
-    if (@TypeOf(transition.Source) != type) {
-        @compileError("The `Source` field has to be `type`");
-    }
-
-    if (!@hasField(trans_type, "Event")) {
-        @compileError("A transition has to has a `Event` field");
-    }
-    if (@TypeOf(transition.Event) != ?type and @TypeOf(transition.Event) != type) {
-        @compileError("The `Event` field has to be `?type` or `type`");
+    if (@TypeOf(transition.src) != type) {
+        @compileError("The `src` field has to be `type`");
     }
 
-    if (!@hasField(trans_type, "Destination")) {
-        @compileError("A transition has to has a `Destination` field");
-    }
-    if (@TypeOf(transition.Destination) != ?type and @TypeOf(transition.Destination) != type) {
-        @compileError("The `Destination` field has to be `?type` or `type`");
+    if (@hasField(trans_type, "event") and @TypeOf(transition.event) != type) {
+        @compileError("The `event` field has to be `type`");
     }
 
-    if (!@hasField(trans_type, "guards")) {
-        @compileError("A transition has to has a `guards` field");
+    if (@hasField(trans_type, "dst") and @TypeOf(transition.dst) != type) {
+        @compileError("The `dst` field has to be `type`");
     }
-    assertGuards(transition.guards);
 
-    if (!@hasField(trans_type, "actions")) {
-        @compileError("A transition has to has a `actions` field");
+    if (@hasField(trans_type, "guards")) {
+        assertGuards(transition.guards);
     }
-    assertActions(transition.actions);
-}
 
-pub fn state(Source: type) Transition(.{}, .{}) {
-    return Transition(.{}, .{}){
-        .Source = Source,
-    };
-}
-
-pub fn initial(Source: type) Transition(.{}, .{}) {
-    return Transition(.{}, .{}){
-        .initial = true,
-        .Source = Source,
-    };
+    if (@hasField(trans_type, "actions")) {
+        assertActions(transition.actions);
+    }
 }

@@ -4,13 +4,11 @@ const TypeList = @import("type_list.zig").TypeList;
 fn ConstructStates(comptime transitions: anytype) type {
     comptime var result = TypeList(.{});
     inline for (transitions) |trans| {
-        if (result.index(trans.Source) == null) {
-            result = result.append(trans.Source);
+        if (result.index(trans.src) == null) {
+            result = result.append(trans.src);
         }
-        if (trans.Destination) |Dest| {
-            if (result.index(Dest) == null) {
-                result = result.append(Dest);
-            }
+        if (@hasField(@TypeOf(trans), "dst") and @TypeOf(trans.dst) == type) {
+            result = result.append(trans.dst);
         }
     }
 
@@ -23,7 +21,7 @@ pub fn StateMachine(comptime transitions: anytype) type {
         for (transitions) |trans| {
             transition.assertTransition(trans);
 
-            if (trans.initial) {
+            if (@hasField(@TypeOf(trans), "initial") and trans.initial) {
                 initials += 1;
             }
         }
@@ -42,22 +40,26 @@ pub fn StateMachine(comptime transitions: anytype) type {
 
         pub fn process(self: *Self, event: anytype) void {
             inline for (transitions) |trans| {
-                if (getIndex(trans.Source) == self.current) {
-                    if (trans.Event) |Event| {
-                        if (@TypeOf(event) == Event) {
+                if (getIndex(trans.src) == self.current) {
+                    const Trans = @TypeOf(trans);
+
+                    if (@hasField(Trans, "event")) {
+                        if (@TypeOf(event) == trans.event) {
                             var passed = true;
-                            inline for (trans.guards) |guard| {
-                                if (passed) {
-                                    passed = passed and self.invoke(guard);
+                            comptime if (@hasField(Trans, "guards")) {
+                                for (trans.guards) |guard| {
+                                    if (passed) {
+                                        passed = passed and self.invoke(guard);
+                                    }
                                 }
-                            }
+                            };
                             if (passed) {
                                 inline for (trans.actions) |action| {
                                     self.invoke(action);
                                 }
 
-                                if (trans.Destination) |Dest| {
-                                    self.current = getIndex(Dest);
+                                if (@hasField(@TypeOf(trans), "dst")) {
+                                    self.current = getIndex(trans.dst);
                                     return;
                                 }
                             }

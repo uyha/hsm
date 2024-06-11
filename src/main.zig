@@ -30,16 +30,16 @@ pub fn hello2() void {
     std.debug.print("{s}:{} ({s})\n", .{ @src().file, @src().line, @src().fn_name });
 }
 
-const Event = struct {};
+const Event = struct {
+    Source: u8,
+};
 
 pub fn main() !void {
     var sm = hsm.stateMachine(.{
-        initial(u8).with(Event).when(.{&always}).then_do(.{&hello}).then_enter(u16),
-        state(u16).with(Event).when(.{&sometime}).then_do(.{&hello2}).then_enter(u8),
-        state(u16).with(Event).when(.{&always}).then_do(.{&hello1}).then_enter(u8),
+        .{ .initial = true, .src = u8, .event = Event, .actions = .{&hello} },
     });
 
-    for (0..10) |_| {
-        sm.process(Event{});
+    for (0..10) |i| {
+        sm.process(Event{ .Source = @intCast(i) });
     }
 }
