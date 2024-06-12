@@ -1,8 +1,7 @@
 const std = @import("std");
 const hsm = @import("root.zig");
 
-const state = hsm.state;
-const initial = hsm.initial;
+const State = hsm.State;
 
 pub fn main() !void {
     @"Traffic light"();
@@ -23,6 +22,14 @@ fn starting() void {
     std.debug.print("Starting to run\n", .{});
 }
 
+const Count = struct {
+    count: usize = 0,
+};
+
+fn tick(source: *Count) void {
+    source.count += 1;
+}
+
 fn @"Traffic light"() void {
     const Red = struct {};
     const Yellow = struct {};
@@ -32,15 +39,22 @@ fn @"Traffic light"() void {
     const Slowing = struct {};
     const Stopped = struct {};
 
+    const Observing = struct {};
+
     var stopCount: usize = 0;
-    var sm = hsm.stateMachine(.{
+    var count: Count = .{};
+    var sm = hsm.State(.{
         .{ .initial = true, .src = Running, .event = Red, .dst = Stopped, .actions = .{harshStop} },
         .{ .src = Running, .event = Yellow, .dst = Slowing, .actions = .{slowingDown} },
 
         .{ .src = Slowing, .event = Red, .dst = Stopped, .actions = .{softStop} },
 
         .{ .src = Stopped, .event = Green, .dst = Running, .actions = .{starting} },
-    }, .{&stopCount});
+
+        .{ .initial = true, .src = Observing, .event = Red, .actions = .{tick} },
+        .{ .src = Observing, .event = Yellow, .actions = .{tick} },
+        .{ .src = Observing, .event = Green, .actions = .{tick} },
+    }).init(.{ &stopCount, &count });
 
     sm.process(Red{});
     sm.process(Green{});
@@ -49,4 +63,5 @@ fn @"Traffic light"() void {
     sm.process(Green{});
 
     std.debug.print("Stops: {}\n", .{stopCount});
+    std.debug.print("Ticks: {}\n", .{count.count});
 }
