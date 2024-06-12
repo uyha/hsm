@@ -18,9 +18,9 @@ pub fn hello(event: Event) void {
     std.debug.print("{s}:{} ({s}) ", .{ @src().file, @src().line, @src().fn_name });
     std.debug.print("{}\n", .{event});
 }
-pub fn hell(event: u8) void {
-    std.debug.print("{s}:{} ({s}) ", .{ @src().file, @src().line, @src().fn_name });
-    std.debug.print("{}\n", .{event});
+pub fn hell(event: Event1, counter: *u8) void {
+    std.debug.print("{s}:{} ({s})\n", .{ @src().file, @src().line, @src().fn_name });
+    counter.* += event.Source;
 }
 pub fn hello1() void {
     std.debug.print("{s}:{} ({s})\n", .{ @src().file, @src().line, @src().fn_name });
@@ -33,23 +33,27 @@ const Event = struct {
     Source: usize,
 };
 const Event1 = struct {
-    Source: usize,
+    Source: u8,
 };
 
 pub fn main() !void {
+    var counter: u8 = 0;
     var sm = hsm.stateMachine(.{
         .{
             .initial = true,
             .src = u8,
             .event = Event,
-            .dst = u16,
-            .guards = .{sometime},
             .actions = .{hello},
         },
         .{ .src = u8, .event = Event1, .actions = .{hell} },
-    }, .{@as(u8, 1)});
+    }, .{&counter});
 
     sm.process(Event1{ .Source = 1 });
+    sm.process(Event{ .Source = 1 });
+    sm.process(Event1{ .Source = 1 });
+    sm.process(Event{ .Source = 1 });
+
+    std.debug.print("{}\n", .{counter});
     //
     // for (0..10) |i| {
     //     sm.process(Event{ .Source = @intCast(i) });

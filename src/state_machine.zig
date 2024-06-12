@@ -1,7 +1,7 @@
 const transition = @import("transition.zig");
 const TypeList = @import("type_list.zig").TypeList;
 
-fn ConstructStates(comptime transitions: anytype) type {
+fn ConstructStates(transitions: anytype) type {
     comptime var result = TypeList(.{});
     inline for (transitions) |trans| {
         if (result.index(trans.src) == null) {
@@ -15,10 +15,10 @@ fn ConstructStates(comptime transitions: anytype) type {
     return result;
 }
 
-fn assertResources(resources: anytype) void {
-    switch (@typeInfo(@TypeOf(resources))) {
-        .Struct => |Resources| {
-            if (!Resources.is_tuple) {
+fn assertResources(Resources: type) void {
+    switch (@typeInfo(Resources)) {
+        .Struct => |Res| {
+            if (!Res.is_tuple) {
                 @compileError("resources must be a tuple of values");
             }
         },
@@ -26,7 +26,7 @@ fn assertResources(resources: anytype) void {
     }
 }
 
-pub fn StateMachine(comptime transitions: anytype, resources: anytype) type {
+pub fn StateMachine(transitions: anytype, Resources: type) type {
     comptime {
         var initials = 0;
         for (transitions) |trans| {
@@ -41,12 +41,14 @@ pub fn StateMachine(comptime transitions: anytype, resources: anytype) type {
             @compileError("At least 1 initial transition has to be present");
         }
 
-        assertResources(resources);
+        assertResources(Resources);
     }
 
     return struct {
         const std = @import("std");
         current: usize = 0,
+
+        resources: Resources,
 
         const Self = @This();
         const States = ConstructStates(transitions);
@@ -94,7 +96,7 @@ pub fn StateMachine(comptime transitions: anytype, resources: anytype) type {
             return States.index(T).?;
         }
 
-        fn invoke(_: *const Self, func: anytype, event: anytype) ReturnType(@typeInfo(@TypeOf(func))) {
+        fn invoke(self: *const Self, func: anytype, event: anytype) ReturnType(@typeInfo(@TypeOf(func))) {
             const Fn = switch (@typeInfo(@TypeOf(func))) {
                 .Pointer => |ptr| ptr.child,
                 .Fn => @TypeOf(func),
@@ -112,7 +114,7 @@ pub fn StateMachine(comptime transitions: anytype, resources: anytype) type {
                     args[i] = event;
                     found = true;
                 } else {
-                    inline for (resources) |resource| {
+                    inline for (self.resources) |resource| {
                         if (comptime !found and Arg.type == @TypeOf(resource)) {
                             args[i] = resource;
                             found = true;
@@ -132,9 +134,9 @@ pub fn StateMachine(comptime transitions: anytype, resources: anytype) type {
     };
 }
 
-pub fn stateMachine(comptime transitions: anytype, resources: anytype) StateMachine(
+pub fn stateMachine(transitions: anytype, resources: anytype) StateMachine(
     transitions,
-    resources,
+    @TypeOf(resources),
 ) {
-    return .{};
+    return .{ .resources = resources };
 }
