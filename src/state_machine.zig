@@ -15,7 +15,18 @@ fn ConstructStates(comptime transitions: anytype) type {
     return result;
 }
 
-pub fn StateMachine(comptime transitions: anytype) type {
+fn assertResources(resources: anytype) void {
+    switch (@typeInfo(@TypeOf(resources))) {
+        .Struct => |Resources| {
+            if (!Resources.is_tuple) {
+                @compileError("resources must be a tuple of values");
+            }
+        },
+        else => @compileError("resources must be a tuple of values"),
+    }
+}
+
+pub fn StateMachine(comptime transitions: anytype, resources: anytype) type {
     comptime {
         var initials = 0;
         for (transitions) |trans| {
@@ -29,6 +40,8 @@ pub fn StateMachine(comptime transitions: anytype) type {
         if (initials == 0) {
             @compileError("At least 1 initial transition has to be present");
         }
+
+        assertResources(resources);
     }
 
     return struct {
@@ -93,9 +106,21 @@ pub fn StateMachine(comptime transitions: anytype) type {
             var args: Args = if (len == 0) .{} else .{undefined} ** len;
 
             inline for (0.., @typeInfo(Args).Struct.fields) |i, Arg| {
+                comptime var found = false;
+
                 if (comptime Arg.type == @TypeOf(event)) {
                     args[i] = event;
+                    found = true;
                 } else {
+                    inline for (resources) |resource| {
+                        if (comptime !found and Arg.type == @TypeOf(resource)) {
+                            args[i] = resource;
+                            found = true;
+                        }
+                    }
+                }
+
+                if (comptime !found) {
                     @compileError(
                         std.fmt.comptimePrint("{} not available\n", .{Arg.type}),
                     );
@@ -107,6 +132,9 @@ pub fn StateMachine(comptime transitions: anytype) type {
     };
 }
 
-pub fn stateMachine(comptime transitions: anytype) StateMachine(transitions) {
-    return StateMachine(transitions){};
+pub fn stateMachine(comptime transitions: anytype, resources: anytype) StateMachine(
+    transitions,
+    resources,
+) {
+    return .{};
 }

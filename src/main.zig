@@ -18,7 +18,7 @@ pub fn hello(event: Event) void {
     std.debug.print("{s}:{} ({s}) ", .{ @src().file, @src().line, @src().fn_name });
     std.debug.print("{}\n", .{event});
 }
-pub fn hell(event: Event1) void {
+pub fn hell(event: u8) void {
     std.debug.print("{s}:{} ({s}) ", .{ @src().file, @src().line, @src().fn_name });
     std.debug.print("{}\n", .{event});
 }
@@ -47,7 +47,7 @@ pub fn main() !void {
             .actions = .{hello},
         },
         .{ .src = u8, .event = Event1, .actions = .{hell} },
-    });
+    }, .{@as(u8, 1)});
 
     sm.process(Event1{ .Source = 1 });
     //
