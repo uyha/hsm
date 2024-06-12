@@ -43,25 +43,25 @@ pub fn StateMachine(comptime transitions: anytype) type {
                 if (getIndex(trans.src) == self.current) {
                     const Trans = @TypeOf(trans);
 
-                    if (@hasField(Trans, "event")) {
-                        if (@TypeOf(event) == trans.event) {
-                            var passed = true;
-                            if (comptime @hasField(Trans, "guards")) {
-                                inline for (trans.guards) |guard| {
-                                    if (passed) {
-                                        passed = passed and self.invoke(guard, event);
-                                    }
+                    if (comptime @hasField(Trans, "event") and
+                        @TypeOf(event) == trans.event)
+                    {
+                        var passed = true;
+                        if (comptime @hasField(Trans, "guards")) {
+                            inline for (trans.guards) |guard| {
+                                if (passed) {
+                                    passed = passed and self.invoke(guard, event);
                                 }
                             }
-                            if (passed) {
-                                inline for (trans.actions) |action| {
-                                    self.invoke(action, event);
-                                }
+                        }
+                        if (passed) {
+                            inline for (trans.actions) |action| {
+                                self.invoke(action, event);
+                            }
 
-                                if (@hasField(@TypeOf(trans), "dst")) {
-                                    self.current = getIndex(trans.dst);
-                                    return;
-                                }
+                            if (@hasField(@TypeOf(trans), "dst")) {
+                                self.current = getIndex(trans.dst);
+                                return;
                             }
                         }
                     }
@@ -96,7 +96,9 @@ pub fn StateMachine(comptime transitions: anytype) type {
                 if (comptime Arg.type == @TypeOf(event)) {
                     args[i] = event;
                 } else {
-                    @compileError("No value available");
+                    @compileError(
+                        std.fmt.comptimePrint("{} not available\n", .{Arg.type}),
+                    );
                 }
             }
 

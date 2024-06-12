@@ -18,6 +18,10 @@ pub fn hello(event: Event) void {
     std.debug.print("{s}:{} ({s}) ", .{ @src().file, @src().line, @src().fn_name });
     std.debug.print("{}\n", .{event});
 }
+pub fn hell(event: Event1) void {
+    std.debug.print("{s}:{} ({s}) ", .{ @src().file, @src().line, @src().fn_name });
+    std.debug.print("{}\n", .{event});
+}
 pub fn hello1() void {
     std.debug.print("{s}:{} ({s})\n", .{ @src().file, @src().line, @src().fn_name });
 }
@@ -26,7 +30,10 @@ pub fn hello2() void {
 }
 
 const Event = struct {
-    Source: u8,
+    Source: usize,
+};
+const Event1 = struct {
+    Source: usize,
 };
 
 pub fn main() !void {
@@ -39,11 +46,12 @@ pub fn main() !void {
             .guards = .{sometime},
             .actions = .{hello},
         },
-        .{ .src = u16, .event = Event, .dst = u32, .guards = .{sometime}, .actions = .{hello1} },
-        .{ .src = u32, .event = Event, .dst = u8, .actions = .{&hello2} },
+        .{ .src = u8, .event = Event1, .actions = .{hell} },
     });
 
-    for (0..10) |i| {
-        sm.process(Event{ .Source = @intCast(i) });
-    }
+    sm.process(Event1{ .Source = 1 });
+    //
+    // for (0..10) |i| {
+    //     sm.process(Event{ .Source = @intCast(i) });
+    // }
 }
