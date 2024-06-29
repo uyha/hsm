@@ -294,4 +294,37 @@ fn CompositeState(comptime transitions: anytype) type {
     };
 }
 
+// A State has to be initialized with a tuple of transitions
+// A transition is a tuple that has the following fields
+//      .initial : bool (Optional)
+//      .src : type
+//      .event: type (Optional)
+//      .dst : type (Optional)
+//      .guards : tuple of fn or *fn (Optional)
+//      .actions : tupel of fn or *fn (Optional)
+// At least 1 transition has to have .init = true
 pub const State = CompositeState;
+
+test "Simple State" {
+    const testing = std.testing;
+
+    const S1 = struct {};
+    const S2 = struct {};
+
+    const TestStateMachine = State(.{
+        .{ .initial = true, .src = S1, .event = i32, .dst = S2 },
+        .{ .src = S2, .event = i32, .dst = S1 },
+    });
+
+    var state_machine = TestStateMachine.init(.{});
+
+    try testing.expect(state_machine.is(S1));
+
+    try testing.expect(!state_machine.process(@as(i8, 1)));
+    try testing.expect(state_machine.process(@as(i32, 1)));
+
+    try testing.expect(state_machine.is(S2));
+    try testing.expect(state_machine.process(@as(i32, 1)));
+
+    try testing.expect(state_machine.is(S1));
+}
