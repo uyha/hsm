@@ -27,6 +27,45 @@ test "Simple State" {
     try testing.expect(state_machine.is(S1));
 }
 
+test "State machine with crossing events" {
+    const testing = std.testing;
+
+    const S1 = struct {};
+    const S2 = struct {};
+    const S3 = struct {};
+
+    const E1 = struct {};
+    const E2 = struct {};
+    const E3 = struct {};
+
+    const TestStateMachine = State(.{
+        .{ .init = true, .src = S1, .event = E2, .dst = S2 },
+        .{ .src = S1, .event = E3, .dst = S3 },
+
+        .{ .src = S2, .event = E1, .dst = S1 },
+        .{ .src = S2, .event = E3, .dst = S3 },
+
+        .{ .src = S3, .event = E1, .dst = S1 },
+        .{ .src = S3, .event = E2, .dst = S2 },
+    });
+
+    var state_machine = TestStateMachine.init(.{});
+
+    try testing.expect(state_machine.is(S1));
+
+    try testing.expect(!state_machine.process(E1{}));
+    try testing.expect(state_machine.process(E2{}));
+    try testing.expect(state_machine.is(S2));
+
+    try testing.expect(!state_machine.process(E2{}));
+    try testing.expect(state_machine.process(E3{}));
+    try testing.expect(state_machine.is(S3));
+
+    try testing.expect(!state_machine.process(E3{}));
+    try testing.expect(state_machine.process(E2{}));
+    try testing.expect(state_machine.is(S2));
+}
+
 const Event = struct {
     value: u32,
 
