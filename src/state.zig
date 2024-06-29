@@ -100,8 +100,8 @@ pub fn assertTransition(transition: anytype) void {
         ));
     }
 
-    if (@hasField(trans_type, "initial") and @TypeOf(transition.initial) != bool) {
-        @compileError("The `initial` field has to be `bool`");
+    if (@hasField(trans_type, "init") and @TypeOf(transition.init) != bool) {
+        @compileError("The `init` field has to be `bool`");
     }
 
     if (!@hasField(trans_type, "src")) {
@@ -128,22 +128,22 @@ pub fn assertTransition(transition: anytype) void {
     }
 }
 
-fn totalInitials(transitions: anytype) usize {
-    var initials = 0;
+fn totalInits(transitions: anytype) usize {
+    var inits = 0;
     for (transitions) |trans| {
         assertTransition(trans);
 
-        if (@hasField(@TypeOf(trans), "initial") and trans.initial) {
-            initials += 1;
+        if (@hasField(@TypeOf(trans), "init") and trans.init) {
+            inits += 1;
         }
     }
 
-    return initials;
+    return inits;
 }
 
-fn assertInitials(transitions: anytype) void {
-    if (totalInitials(transitions) == 0) {
-        @compileError("At least 1 initial transition has to be present");
+fn assertInits(transitions: anytype) void {
+    if (totalInits(transitions) == 0) {
+        @compileError("At least 1 init transition has to be present");
     }
 }
 
@@ -159,17 +159,17 @@ fn assertResources(Resources: type) void {
 }
 
 fn StateIndices(transitions: anytype) type {
-    return [totalInitials(transitions)]usize;
+    return [totalInits(transitions)]usize;
 }
 
-fn initialStateIndices(transitions: anytype, type_list: type) StateIndices(transitions) {
-    const inititals = totalInitials(transitions);
+fn initStateIndices(transitions: anytype, type_list: type) StateIndices(transitions) {
+    const inits = totalInits(transitions);
 
-    var result: StateIndices(transitions) = .{undefined} ** inititals;
+    var result: StateIndices(transitions) = .{undefined} ** inits;
     var index = 0;
 
     for (transitions) |trans| {
-        if (@hasField(@TypeOf(trans), "initial") and trans.initial) {
+        if (@hasField(@TypeOf(trans), "init") and trans.init) {
             result[index] = type_list.index(trans.src).?;
             index += 1;
         }
@@ -185,7 +185,7 @@ fn StateMachine(comptime transitions: anytype, Resources: type) type {
         const Self = @This();
         const States = StatesFromTransitions(transitions);
 
-        stateIndices: StateIndices(transitions) = initialStateIndices(transitions, States),
+        stateIndices: StateIndices(transitions) = initStateIndices(transitions, States),
         resources: Resources,
 
         pub fn process(self: *Self, event: anytype) bool {
@@ -285,7 +285,7 @@ fn StateMachine(comptime transitions: anytype, Resources: type) type {
 }
 
 fn CompositeState(comptime transitions: anytype) type {
-    comptime assertInitials(transitions);
+    comptime assertInits(transitions);
 
     return struct {
         pub fn init(resources: anytype) StateMachine(transitions, @TypeOf(resources)) {
@@ -296,7 +296,7 @@ fn CompositeState(comptime transitions: anytype) type {
 
 // A State has to be initialized with a tuple of transitions
 // A transition is a tuple that has the following fields
-//      .initial : bool (Optional)
+//      .init : bool (Optional)
 //      .src : type
 //      .event: type (Optional)
 //      .dst : type (Optional)
@@ -312,7 +312,7 @@ test "Simple State" {
     const S2 = struct {};
 
     const TestStateMachine = State(.{
-        .{ .initial = true, .src = S1, .event = i32, .dst = S2 },
+        .{ .init = true, .src = S1, .event = i32, .dst = S2 },
         .{ .src = S2, .event = i32, .dst = S1 },
     });
 
@@ -322,6 +322,34 @@ test "Simple State" {
 
     try testing.expect(!state_machine.process(@as(i8, 1)));
     try testing.expect(state_machine.process(@as(i32, 1)));
+
+    try testing.expect(state_machine.is(S2));
+    try testing.expect(state_machine.process(@as(i32, 1)));
+
+    try testing.expect(state_machine.is(S1));
+}
+
+fn isEven(num: i32) bool {
+    return @rem(num, 2) == 0;
+}
+
+test "Guarded transitions" {
+    const testing = std.testing;
+
+    const S1 = struct {};
+    const S2 = struct {};
+
+    const TestStateMachine = State(.{
+        .{ .init = true, .src = S1, .event = i32, .dst = S2, .guards = .{isEven} },
+        .{ .src = S2, .event = i32, .dst = S1 },
+    });
+
+    var state_machine = TestStateMachine.init(.{});
+
+    try testing.expect(state_machine.is(S1));
+
+    try testing.expect(!state_machine.process(@as(i32, 1)));
+    try testing.expect(state_machine.process(@as(i32, 2)));
 
     try testing.expect(state_machine.is(S2));
     try testing.expect(state_machine.process(@as(i32, 1)));
