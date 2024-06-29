@@ -27,7 +27,7 @@ test "Simple State" {
     try testing.expect(state_machine.is(S1));
 }
 
-test "State machine with crossing events" {
+test "Crossing events" {
     const testing = std.testing;
 
     const S1 = struct {};
@@ -106,7 +106,7 @@ fn isMutablePointerEven(value: *u32) bool {
     return @rem(value.*, 2) == 0;
 }
 
-test "State machine with resources" {
+test "Resources" {
     const testing = std.testing;
 
     const S1 = struct {};
@@ -137,7 +137,7 @@ fn isConstPointerEven(value: *const u32) bool {
     return @rem(value.*, 2) == 0;
 }
 
-test "State machine with coercible resources" {
+test "Coercible resources" {
     const testing = std.testing;
 
     const S1 = struct {};
@@ -164,7 +164,7 @@ test "State machine with coercible resources" {
     try testing.expect(state_machine.is(S2));
 }
 
-test "Multiple region state machine" {
+test "Multiple regions" {
     const testing = std.testing;
 
     const @"S1.1" = struct {};
