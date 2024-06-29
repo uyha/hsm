@@ -304,11 +304,11 @@ fn CompositeState(comptime transitions: anytype) type {
 
 // A State has to be initialized with a tuple of transitions
 // A transition is a tuple that has the following fields
-//      .init : bool (Optional)
-//      .src : type
+//      .init: bool (Optional)
+//      .src: type
 //      .event: type (Optional)
-//      .dst : type (Optional)
-//      .guards : tuple of fn or *fn (Optional)
-//      .actions : tupel of fn or *fn (Optional)
+//      .dst: type (Optional)
+//      .guards: tuple of fn or *fn (Optional)
+//      .actions: tuple of fn or *fn (Optional)
 // At least 1 transition has to have .init = true
 pub const State = CompositeState;
