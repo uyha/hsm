@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const TypeList = @import("type_list.zig").TypeList;
+const coercible = @import("type.zig").coercible;
 
 fn StatesFromTransitions(transitions: anytype) type {
     comptime var result = TypeList(.{});
@@ -261,26 +262,29 @@ fn StateMachine(comptime transitions: anytype, Resources: type) type {
 
             var args: Args = if (len == 0) .{} else .{undefined} ** len;
 
-            inline for (0.., @typeInfo(Args).Struct.fields) |i, Arg| {
-                comptime var found = false;
-
+            search: inline for (0.., @typeInfo(Args).Struct.fields) |i, Arg| {
                 if (comptime Arg.type == @TypeOf(event)) {
                     args[i] = event;
-                    found = true;
-                } else {
-                    inline for (self.resources) |resource| {
-                        if (comptime !found and Arg.type == @TypeOf(resource)) {
-                            args[i] = resource;
-                            found = true;
-                        }
+                    continue :search;
+                }
+
+                inline for (self.resources) |resource| {
+                    if (comptime Arg.type == @TypeOf(resource)) {
+                        args[i] = resource;
+                        continue :search;
                     }
                 }
 
-                if (comptime !found) {
-                    @compileError(
-                        std.fmt.comptimePrint("{} not available\n", .{Arg.type}),
-                    );
+                inline for (self.resources) |resource| {
+                    if (comptime coercible(@TypeOf(resource), Arg.type)) {
+                        args[i] = resource;
+                        continue :search;
+                    }
                 }
+
+                @compileError(
+                    std.fmt.comptimePrint("{} not available\n", .{Arg.type}),
+                );
             }
 
             return @call(.auto, func, args);
