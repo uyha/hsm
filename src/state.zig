@@ -188,7 +188,9 @@ fn StateMachine(comptime transitions: anytype, Resources: type) type {
         stateIndices: StateIndices(transitions) = initialStateIndices(transitions, States),
         resources: Resources,
 
-        pub fn process(self: *Self, event: anytype) void {
+        pub fn process(self: *Self, event: anytype) bool {
+            var processed = false;
+
             region: for (0.., self.stateIndices) |index, stateIndex| {
                 inline for (transitions) |trans| {
                     if (States.index(trans.src).? == stateIndex) {
@@ -205,6 +207,8 @@ fn StateMachine(comptime transitions: anytype, Resources: type) type {
                                 }
                             }
                             if (passed) {
+                                processed = true;
+
                                 if (comptime @hasField(Trans, "actions")) {
                                     inline for (trans.actions) |action| {
                                         self.invoke(action, event);
@@ -220,6 +224,18 @@ fn StateMachine(comptime transitions: anytype, Resources: type) type {
                     }
                 }
             }
+
+            return processed;
+        }
+
+        pub fn is(self: *const Self, current: type) bool {
+            const index = States.index(current);
+            for (self.stateIndices) |stateIndex| {
+                if (index == stateIndex) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         fn ReturnType(comptime info: std.builtin.Type) type {
