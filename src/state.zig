@@ -246,7 +246,11 @@ fn StateMachine(comptime transitions: anytype, Resources: type) type {
             };
         }
 
-        fn invoke(self: *const Self, func: anytype, event: anytype) ReturnType(@typeInfo(@TypeOf(func))) {
+        fn invoke(
+            self: *const Self,
+            func: anytype,
+            event: anytype,
+        ) ReturnType(@typeInfo(@TypeOf(func))) {
             const Fn = switch (@typeInfo(@TypeOf(func))) {
                 .Pointer => |ptr| ptr.child,
                 .Fn => @TypeOf(func),
