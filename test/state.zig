@@ -1,11 +1,10 @@
 const std = @import("std");
 const state = @import("hsm");
+const testing = std.testing;
 
 const State = state.State;
 
 test "Simple State" {
-    const testing = std.testing;
-
     const S1 = struct {};
     const S2 = struct {};
 
@@ -28,8 +27,6 @@ test "Simple State" {
 }
 
 test "Crossing events" {
-    const testing = std.testing;
-
     const S1 = struct {};
     const S2 = struct {};
     const S3 = struct {};
@@ -79,8 +76,6 @@ fn isEven(value: u32) bool {
 }
 
 test "Guarded transitions" {
-    const testing = std.testing;
-
     const S1 = struct {};
     const S2 = struct {};
 
@@ -107,8 +102,6 @@ fn isMutablePointerEven(value: *u32) bool {
 }
 
 test "Resources" {
-    const testing = std.testing;
-
     const S1 = struct {};
     const S2 = struct {};
     const E1 = struct {};
@@ -138,8 +131,6 @@ fn isConstPointerEven(value: *const u32) bool {
 }
 
 test "Coercible resources" {
-    const testing = std.testing;
-
     const S1 = struct {};
     const S2 = struct {};
     const E1 = struct {};
@@ -165,8 +156,6 @@ test "Coercible resources" {
 }
 
 test "Multiple regions" {
-    const testing = std.testing;
-
     const @"S1.1" = struct {};
     const @"S1.2" = struct {};
     const @"S2.1" = struct {};
@@ -198,6 +187,44 @@ test "Multiple regions" {
     try testing.expect(state_machine.is(@"S2.1"));
 
     try testing.expect(state_machine.process(E1{}));
+    try testing.expect(state_machine.is(@"S1.1"));
+    try testing.expect(state_machine.is(@"S2.1"));
+}
+
+test "Multiple regions with shared event" {
+    const @"S1.1" = struct {};
+    const @"S1.2" = struct {};
+    const @"S2.1" = struct {};
+    const @"S2.2" = struct {};
+    const E1 = struct {};
+    const E2 = struct {};
+    const E3 = struct {};
+
+    const TestStateMachine = State(.{
+        .{ .init = true, .src = @"S1.1", .event = E1, .dst = @"S1.2" },
+
+        .{ .src = @"S1.2", .event = E1, .dst = @"S1.1" },
+        .{ .src = @"S1.2", .event = E3, .dst = @"S1.1" },
+
+        .{ .init = true, .src = @"S2.1", .event = E2, .dst = @"S2.2" },
+
+        .{ .src = @"S2.2", .event = E2, .dst = @"S2.1" },
+        .{ .src = @"S2.2", .event = E3, .dst = @"S2.1" },
+    });
+
+    var state_machine = TestStateMachine.init(.{});
+    try testing.expect(state_machine.is(@"S1.1"));
+    try testing.expect(state_machine.is(@"S2.1"));
+
+    try testing.expect(state_machine.process(E1{}));
+    try testing.expect(state_machine.is(@"S1.2"));
+    try testing.expect(state_machine.is(@"S2.1"));
+
+    try testing.expect(state_machine.process(E2{}));
+    try testing.expect(state_machine.is(@"S1.2"));
+    try testing.expect(state_machine.is(@"S2.2"));
+
+    try testing.expect(state_machine.process(E3{}));
     try testing.expect(state_machine.is(@"S1.1"));
     try testing.expect(state_machine.is(@"S2.1"));
 }
