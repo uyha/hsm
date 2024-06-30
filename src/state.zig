@@ -118,8 +118,13 @@ pub fn assertTransition(transition: anytype) void {
         @compileError("The `event` field has to be `type`");
     }
 
-    if (@hasField(trans_type, "dst") and @TypeOf(transition.dst) != type) {
-        @compileError("The `dst` field has to be `type`");
+    if (@hasField(trans_type, "dst")) {
+        if (@TypeOf(transition.dst) != type) {
+            @compileError("The `dst` field has to be `type`");
+        }
+        if (transition.dst == Any) {
+            @compileError("The `dst` field cannot be `Any`");
+        }
     }
 
     if (@hasField(trans_type, "guards")) {
@@ -200,7 +205,9 @@ fn StateMachine(comptime transitions: anytype, Resources: type) type {
 
             region: for (0.., self.stateIndices) |index, stateIndex| {
                 inline for (transitions) |trans| {
-                    if (States.index(trans.src).? == stateIndex) {
+                    if (States.index(trans.src).? == stateIndex or
+                        (comptime trans.src == Any))
+                    {
                         const Trans = @TypeOf(trans);
                         if (comptime @hasField(Trans, "event") and
                             @TypeOf(event) == trans.event or

@@ -254,6 +254,35 @@ test "Multiple regions with shared event" {
     try testing.expect(state_machine.is(@"S2.1"));
 }
 
+test "Transition with .src being `Any` state is triggered with the specified event no matter the current state" {
+    const S1 = struct {};
+    const S2 = struct {};
+
+    const TestStateMachine = State(.{
+        .{ .init = true, .src = S1, .event = bool, .dst = S2 },
+        .{ .src = S2, .event = bool, .dst = S1 },
+
+        .{ .src = Any, .event = comptime_float, .dst = S1, .actions = .{increment} },
+    });
+
+    var value: u32 = 0;
+    var state_machine = TestStateMachine.init(.{&value});
+
+    try testing.expect(state_machine.is(S1));
+
+    try testing.expect(state_machine.detailedProcess(true));
+    try testing.expectEqual(0, value);
+    try testing.expect(state_machine.is(S2));
+
+    try testing.expect(state_machine.detailedProcess(0.0));
+    try testing.expectEqual(1, value);
+    try testing.expect(state_machine.is(S1));
+
+    try testing.expect(state_machine.detailedProcess(0.0));
+    try testing.expectEqual(2, value);
+    try testing.expect(state_machine.is(S1));
+}
+
 test "Any event is triggered with any event" {
     const S1 = struct {};
 
