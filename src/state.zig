@@ -189,7 +189,11 @@ fn StateMachine(comptime transitions: anytype, Resources: type) type {
         stateIndices: StateIndices(transitions) = initStateIndices(transitions, States),
         resources: Resources,
 
-        pub fn process(self: *Self, event: anytype) bool {
+        pub fn process(self: *Self, event: anytype) void {
+            _ = self.detailedProcess(event);
+        }
+
+        pub fn detailedProcess(self: *Self, event: anytype) bool {
             var processed = false;
 
             region: for (0.., self.stateIndices) |index, stateIndex| {

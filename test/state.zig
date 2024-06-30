@@ -17,11 +17,11 @@ test "Simple State" {
 
     try testing.expect(state_machine.is(S1));
 
-    try testing.expect(!state_machine.process(@as(i8, 1)));
-    try testing.expect(state_machine.process(@as(i32, 1)));
+    try testing.expect(!state_machine.detailedProcess(@as(i8, 1)));
+    try testing.expect(state_machine.detailedProcess(@as(i32, 1)));
 
     try testing.expect(state_machine.is(S2));
-    try testing.expect(state_machine.process(@as(i32, 1)));
+    try testing.expect(state_machine.detailedProcess(@as(i32, 1)));
 
     try testing.expect(state_machine.is(S1));
 }
@@ -50,16 +50,16 @@ test "Crossing events" {
 
     try testing.expect(state_machine.is(S1));
 
-    try testing.expect(!state_machine.process(E1{}));
-    try testing.expect(state_machine.process(E2{}));
+    try testing.expect(!state_machine.detailedProcess(E1{}));
+    try testing.expect(state_machine.detailedProcess(E2{}));
     try testing.expect(state_machine.is(S2));
 
-    try testing.expect(!state_machine.process(E2{}));
-    try testing.expect(state_machine.process(E3{}));
+    try testing.expect(!state_machine.detailedProcess(E2{}));
+    try testing.expect(state_machine.detailedProcess(E3{}));
     try testing.expect(state_machine.is(S3));
 
-    try testing.expect(!state_machine.process(E3{}));
-    try testing.expect(state_machine.process(E2{}));
+    try testing.expect(!state_machine.detailedProcess(E3{}));
+    try testing.expect(state_machine.detailedProcess(E2{}));
     try testing.expect(state_machine.is(S2));
 }
 
@@ -88,12 +88,12 @@ test "Guarded transitions" {
 
     try testing.expect(state_machine.is(S1));
 
-    try testing.expect(!state_machine.process(Event{ .value = 1 }));
-    try testing.expect(state_machine.process(Event{ .value = 2 }));
+    try testing.expect(!state_machine.detailedProcess(Event{ .value = 1 }));
+    try testing.expect(state_machine.detailedProcess(Event{ .value = 2 }));
     try testing.expect(state_machine.is(S2));
 
-    try testing.expect(!state_machine.process(@as(u32, 1)));
-    try testing.expect(state_machine.process(@as(u32, 2)));
+    try testing.expect(!state_machine.detailedProcess(@as(u32, 1)));
+    try testing.expect(state_machine.detailedProcess(@as(u32, 2)));
     try testing.expect(state_machine.is(S1));
 }
 
@@ -116,13 +116,13 @@ test "Resources" {
     var state_machine = TestStateMachine.init(.{&resource});
 
     try testing.expect(state_machine.is(S1));
-    try testing.expect(!state_machine.process(E1{}));
+    try testing.expect(!state_machine.detailedProcess(E1{}));
 
     try testing.expect(state_machine.is(S1));
 
     resource = 2;
 
-    try testing.expect(state_machine.process(E1{}));
+    try testing.expect(state_machine.detailedProcess(E1{}));
     try testing.expect(state_machine.is(S2));
 }
 
@@ -145,13 +145,13 @@ test "Coercible resources" {
     var state_machine = TestStateMachine.init(.{&resource});
 
     try testing.expect(state_machine.is(S1));
-    try testing.expect(!state_machine.process(E1{}));
+    try testing.expect(!state_machine.detailedProcess(E1{}));
 
     try testing.expect(state_machine.is(S1));
 
     resource = 2;
 
-    try testing.expect(state_machine.process(E1{}));
+    try testing.expect(state_machine.detailedProcess(E1{}));
     try testing.expect(state_machine.is(S2));
 }
 
@@ -174,19 +174,19 @@ test "Multiple regions" {
     try testing.expect(state_machine.is(@"S1.1"));
     try testing.expect(state_machine.is(@"S2.1"));
 
-    try testing.expect(state_machine.process(E1{}));
+    try testing.expect(state_machine.detailedProcess(E1{}));
     try testing.expect(state_machine.is(@"S1.2"));
     try testing.expect(state_machine.is(@"S2.1"));
 
-    try testing.expect(state_machine.process(E2{}));
+    try testing.expect(state_machine.detailedProcess(E2{}));
     try testing.expect(state_machine.is(@"S1.2"));
     try testing.expect(state_machine.is(@"S2.2"));
 
-    try testing.expect(state_machine.process(E2{}));
+    try testing.expect(state_machine.detailedProcess(E2{}));
     try testing.expect(state_machine.is(@"S1.2"));
     try testing.expect(state_machine.is(@"S2.1"));
 
-    try testing.expect(state_machine.process(E1{}));
+    try testing.expect(state_machine.detailedProcess(E1{}));
     try testing.expect(state_machine.is(@"S1.1"));
     try testing.expect(state_machine.is(@"S2.1"));
 }
@@ -216,15 +216,15 @@ test "Multiple regions with shared event" {
     try testing.expect(state_machine.is(@"S1.1"));
     try testing.expect(state_machine.is(@"S2.1"));
 
-    try testing.expect(state_machine.process(E1{}));
+    try testing.expect(state_machine.detailedProcess(E1{}));
     try testing.expect(state_machine.is(@"S1.2"));
     try testing.expect(state_machine.is(@"S2.1"));
 
-    try testing.expect(state_machine.process(E2{}));
+    try testing.expect(state_machine.detailedProcess(E2{}));
     try testing.expect(state_machine.is(@"S1.2"));
     try testing.expect(state_machine.is(@"S2.2"));
 
-    try testing.expect(state_machine.process(E3{}));
+    try testing.expect(state_machine.detailedProcess(E3{}));
     try testing.expect(state_machine.is(@"S1.1"));
     try testing.expect(state_machine.is(@"S2.1"));
 }

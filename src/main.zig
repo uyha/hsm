@@ -56,11 +56,11 @@ fn @"Traffic light"() void {
         .{ .src = Observing, .event = Green, .actions = .{tick} },
     }).init(.{ &stopCount, &count });
 
-    _ = sm.process(Red{});
-    _ = sm.process(Green{});
-    _ = sm.process(Yellow{});
-    _ = sm.process(Red{});
-    _ = sm.process(Green{});
+    sm.process(Red{});
+    sm.process(Green{});
+    sm.process(Yellow{});
+    sm.process(Red{});
+    sm.process(Green{});
 
     std.debug.print("Stops: {}\n", .{stopCount});
     std.debug.print("Ticks: {}\n", .{count.count});
