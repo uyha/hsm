@@ -2,6 +2,7 @@ const std = @import("std");
 const hsm = @import("root.zig");
 
 const State = hsm.State;
+const Any = hsm.Any;
 
 pub fn main() !void {
     @"Traffic light"();
@@ -51,9 +52,7 @@ fn @"Traffic light"() void {
 
         .{ .src = Stopped, .event = Green, .dst = Running, .actions = .{starting} },
 
-        .{ .init = true, .src = Observing, .event = Red, .actions = .{tick} },
-        .{ .src = Observing, .event = Yellow, .actions = .{tick} },
-        .{ .src = Observing, .event = Green, .actions = .{tick} },
+        .{ .init = true, .src = Observing, .event = Any, .actions = .{tick} },
     }).init(.{ &stopCount, &count });
 
     sm.process(Red{});

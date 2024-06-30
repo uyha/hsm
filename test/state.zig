@@ -3,6 +3,7 @@ const state = @import("hsm");
 const testing = std.testing;
 
 const State = state.State;
+const Any = state.Any;
 
 test "Simple State" {
     const S1 = struct {};
@@ -251,4 +252,25 @@ test "Multiple regions with shared event" {
     try testing.expect(state_machine.detailedProcess(E3{}));
     try testing.expect(state_machine.is(@"S1.1"));
     try testing.expect(state_machine.is(@"S2.1"));
+}
+
+test "Any event is triggered with any event" {
+    const S1 = struct {};
+
+    const TestStateMachine = State(.{
+        .{ .init = true, .src = S1, .event = Any, .actions = .{increment} },
+    });
+
+    var value: u32 = 0;
+    var state_machine = TestStateMachine.init(.{&value});
+
+    try testing.expect(state_machine.is(S1));
+    try testing.expect(state_machine.detailedProcess(1));
+    try testing.expectEqual(1, value);
+    try testing.expect(state_machine.detailedProcess(1.0));
+    try testing.expectEqual(2, value);
+    try testing.expect(state_machine.detailedProcess(true));
+    try testing.expectEqual(3, value);
+    try testing.expect(state_machine.detailedProcess(""));
+    try testing.expectEqual(4, value);
 }

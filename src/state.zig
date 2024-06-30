@@ -3,6 +3,8 @@ const std = @import("std");
 const TypeList = @import("type_list.zig").TypeList;
 const coercible = @import("type.zig").coercible;
 
+pub const Any = struct {};
+
 fn StatesFromTransitions(transitions: anytype) type {
     comptime var result = TypeList(.{});
     inline for (transitions) |trans| {
@@ -201,7 +203,8 @@ fn StateMachine(comptime transitions: anytype, Resources: type) type {
                     if (States.index(trans.src).? == stateIndex) {
                         const Trans = @TypeOf(trans);
                         if (comptime @hasField(Trans, "event") and
-                            @TypeOf(event) == trans.event)
+                            @TypeOf(event) == trans.event or
+                            trans.event == Any)
                         {
                             var passed = true;
                             if (comptime @hasField(Trans, "guards")) {
