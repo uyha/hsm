@@ -155,6 +155,30 @@ test "Coercible resources" {
     try testing.expect(state_machine.is(S2));
 }
 
+fn increment(value: *u32) void {
+    value.* += 1;
+}
+
+test "Actions" {
+    const S1 = struct {};
+
+    const TestStateMachine = State(.{
+        .{ .init = true, .src = S1, .event = bool, .actions = .{increment} },
+    });
+
+    var value: u32 = 0;
+
+    var state_machine = TestStateMachine.init(.{&value});
+
+    try testing.expect(state_machine.is(S1));
+
+    try testing.expect(state_machine.detailedProcess(true));
+    try testing.expectEqual(1, value);
+
+    try testing.expect(state_machine.detailedProcess(false));
+    try testing.expectEqual(2, value);
+}
+
 test "Multiple regions" {
     const @"S1.1" = struct {};
     const @"S1.2" = struct {};
