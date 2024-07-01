@@ -283,7 +283,7 @@ test "Transition with .src being `Any` state is triggered with the specified eve
     try testing.expect(state_machine.is(S1));
 }
 
-test "Any event is triggered with any event" {
+test "`Any` event is triggered with any event" {
     const S1 = struct {};
 
     const TestStateMachine = State(.{

@@ -186,6 +186,60 @@ fn initStateIndices(transitions: anytype, type_list: type) StateIndices(transiti
     return result;
 }
 
+fn isStateMachine(comptime T: type) bool {
+    if (!@hasDecl(T, "detailedProcess")) {
+        return false;
+    }
+
+    const detailedProcess = @typeInfo(@TypeOf(T.detailedProcess));
+
+    switch (detailedProcess) {
+        .Fn => |func| {
+            if (func.return_type != bool) {
+                return false;
+            }
+            if (func.params.len != 2) {
+                return false;
+            }
+            if (func.params[0].type != *T) {
+                return false;
+            }
+            if (!func.params[1].is_generic) {
+                return false;
+            }
+        },
+        else => return false,
+    }
+
+    return true;
+}
+
+test "`isStateMachine` accurately determine if a type is a state machine" {
+    const testing = std.testing;
+
+    const state_machine = State(.{.{ .init = true, .src = bool }}).init(.{});
+
+    try testing.expect(isStateMachine(@TypeOf(state_machine)));
+    try testing.expect(!isStateMachine(struct {
+        pub const detailedProcess = 1;
+    }));
+    try testing.expect(!isStateMachine(struct {
+        pub fn detailedProcess() void {}
+    }));
+    try testing.expect(!isStateMachine(struct {
+        pub fn detailedProcess() bool {}
+    }));
+    try testing.expect(!isStateMachine(struct {
+        pub fn detailedProcess(_: bool, _: bool) bool {}
+    }));
+    try testing.expect(!isStateMachine(struct {
+        pub fn detailedProcess(_: *@This(), _: bool) bool {}
+    }));
+    try testing.expect(isStateMachine(struct {
+        pub fn detailedProcess(_: *@This(), _: anytype) bool {}
+    }));
+}
+
 fn StateMachine(comptime transitions: anytype, Resources: type) type {
     comptime assertResources(Resources);
 
@@ -232,8 +286,8 @@ fn StateMachine(comptime transitions: anytype, Resources: type) type {
 
                                 if (@hasField(@TypeOf(trans), "dst")) {
                                     self.stateIndices[index] = States.index(trans.dst).?;
-                                    continue :region;
                                 }
+                                continue :region;
                             }
                         }
                     }
