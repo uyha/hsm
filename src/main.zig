@@ -64,3 +64,12 @@ fn @"Traffic light"() void {
     std.debug.print("Stops: {}\n", .{stopCount});
     std.debug.print("Ticks: {}\n", .{count.count});
 }
+
+fn @"Bootloader to kernel"() void {
+    const @"Power On" = struct {};
+
+    const @"Boot Sequence" = struct {};
+
+    _ = @"Power On";
+    _ = @"Boot Sequence";
+}

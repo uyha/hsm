@@ -303,3 +303,21 @@ test "`Any` event is triggered with any event" {
     try testing.expect(state_machine.detailedProcess(""));
     try testing.expectEqual(4, value);
 }
+
+test "An event shall not be further processed once it's already consumed by a transition" {
+    const S1 = struct {};
+    // const S2 = struct {};
+
+    const E1 = struct {};
+
+    const TestStateMachine = State(.{
+        .{ .init = true, .src = S1, .event = E1 },
+        .{ .src = S1, .event = E1, .actions = .{increment} },
+    });
+
+    var value: u32 = 0;
+    var state_machine = TestStateMachine.init(.{&value});
+
+    try testing.expect(state_machine.detailedProcess(E1{}));
+    try testing.expectEqual(0, value);
+}
