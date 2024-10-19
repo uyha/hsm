@@ -214,10 +214,14 @@ fn isStateMachine(comptime T: type) bool {
     return true;
 }
 
-test "`isStateMachine` accurately determine if a type is a state machine" {
+test "`isStateMachine` accurately determines if a type is a state machine" {
     const testing = std.testing;
 
-    const state_machine = State(.{.{ .init = true, .src = bool }}).init(.{});
+    const state_machine = State(
+        .{
+            .{ .init = true, .src = bool },
+        },
+    ).init(.{});
 
     try testing.expect(isStateMachine(@TypeOf(state_machine)));
     try testing.expect(!isStateMachine(struct {
