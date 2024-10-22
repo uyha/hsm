@@ -10,6 +10,7 @@ A library for declaring hierarchical state machines.
 - [ ] On entry
 - [ ] On exit
 - [ ] Actions
+- [ ] Event generating actions
 - [ ] Self-Transitions
 - [ ] Compound states
 - [ ] Guards
