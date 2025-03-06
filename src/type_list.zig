@@ -3,7 +3,7 @@ const std = @import("std");
 pub fn TypeList(current: anytype) type {
     comptime {
         switch (@typeInfo(@TypeOf(current))) {
-            .Struct => |t| {
+            .@"struct" => |t| {
                 if (!t.is_tuple) {
                     @compileError("`current` must be a tuple of types");
                 }

@@ -21,7 +21,7 @@ fn StatesFromTransitions(transitions: anytype) type {
 
 fn assertPredicate(Guard: type) void {
     switch (@typeInfo(Guard)) {
-        .Fn => |func| {
+        .@"fn" => |func| {
             if (func.return_type != bool) {
                 @compileError(
                     std.fmt.comptimePrint(
@@ -41,14 +41,14 @@ fn assertPredicate(Guard: type) void {
 fn assertGuards(guards: anytype) void {
     comptime {
         switch (@typeInfo(@TypeOf(guards))) {
-            .Struct => |t| {
+            .@"struct" => |t| {
                 if (!t.is_tuple) {
                     @compileError("A tuple of predicates / predicate pointers is expected");
                 }
 
                 for (guards) |guard| {
                     switch (@typeInfo(@TypeOf(guard))) {
-                        .Pointer => |ptr| assertPredicate(ptr.child),
+                        .pointer => |ptr| assertPredicate(ptr.child),
                         else => assertPredicate(@TypeOf(guard)),
                     }
                 }
@@ -63,7 +63,7 @@ fn assertGuards(guards: anytype) void {
 
 fn assertAction(Action: type) void {
     switch (@typeInfo(Action)) {
-        .Fn => {},
+        .@"fn" => {},
         else => @compileError(std.fmt.comptimePrint(
             "A tuple of functions / function pointers is expected, a {} is found inside it",
             .{Action},
@@ -73,14 +73,14 @@ fn assertAction(Action: type) void {
 
 fn assertActions(actions: anytype) void {
     switch (@typeInfo(@TypeOf(actions))) {
-        .Struct => |t| {
+        .@"struct" => |t| {
             if (!t.is_tuple) {
                 @compileError("A tuple of functions / function pointers is expected");
             }
 
             for (actions) |action| {
                 switch (@typeInfo(@TypeOf(action))) {
-                    .Pointer => |ptr| assertAction(ptr.child),
+                    .pointer => |ptr| assertAction(ptr.child),
                     else => assertAction(@TypeOf(action)),
                 }
             }
@@ -96,7 +96,7 @@ pub fn assertTransition(transition: anytype) void {
     const trans_type = @TypeOf(transition);
     const trans_info = @typeInfo(trans_type);
 
-    if (trans_info != .Struct) {
+    if (trans_info != .@"struct") {
         @compileError(std.fmt.comptimePrint(
             "A transition has to be struct, a {} is found instead",
             .{@TypeOf(transition)},
@@ -157,7 +157,7 @@ fn assertInits(transitions: anytype) void {
 
 fn assertResources(Resources: type) void {
     switch (@typeInfo(Resources)) {
-        .Struct => |Res| {
+        .@"struct" => |Res| {
             if (!Res.is_tuple) {
                 @compileError("resources must be a tuple of values");
             }
@@ -194,7 +194,7 @@ fn isStateMachine(comptime T: type) bool {
     const detailedProcess = @typeInfo(@TypeOf(T.detailedProcess));
 
     switch (detailedProcess) {
-        .Fn => |func| {
+        .@"fn" => |func| {
             if (func.return_type != bool) {
                 return false;
             }
@@ -313,8 +313,8 @@ fn StateMachine(comptime transitions: anytype, Resources: type) type {
 
         fn ReturnType(comptime info: std.builtin.Type) type {
             return switch (info) {
-                .Pointer => |ptr| @typeInfo(ptr.child).Fn.return_type.?,
-                .Fn => |func| func.return_type.?,
+                .pointer => |ptr| @typeInfo(ptr.child).@"fn".return_type.?,
+                .@"fn" => |func| func.return_type.?,
                 else => unreachable,
             };
         }
@@ -325,16 +325,16 @@ fn StateMachine(comptime transitions: anytype, Resources: type) type {
             event: anytype,
         ) ReturnType(@typeInfo(@TypeOf(func))) {
             const Fn = switch (@typeInfo(@TypeOf(func))) {
-                .Pointer => |ptr| ptr.child,
-                .Fn => @TypeOf(func),
+                .pointer => |ptr| ptr.child,
+                .@"fn" => @TypeOf(func),
                 else => unreachable,
             };
             const Args = std.meta.ArgsTuple(Fn);
-            const len = @typeInfo(Args).Struct.fields.len;
+            const len = @typeInfo(Args).@"struct".fields.len;
 
             var args: Args = if (len == 0) .{} else .{undefined} ** len;
 
-            search: inline for (0.., @typeInfo(Args).Struct.fields) |i, Arg| {
+            search: inline for (0.., @typeInfo(Args).@"struct".fields) |i, Arg| {
                 if (comptime Arg.type == @TypeOf(event)) {
                     args[i] = event;
                     continue :search;
