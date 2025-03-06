@@ -7,9 +7,9 @@ pub fn coercible(Source: type, Target: type) bool {
     const target_info = @typeInfo(Target);
 
     switch (source_info) {
-        .Pointer => |source_ptr| {
+        .pointer => |source_ptr| {
             switch (target_info) {
-                .Pointer => |target_ptr| {
+                .pointer => |target_ptr| {
                     if (coercible(source_ptr.child, target_ptr.child)) {
                         return (!source_ptr.is_const or target_ptr.is_const) and
                             (!source_ptr.is_volatile or target_ptr.is_volatile) and
