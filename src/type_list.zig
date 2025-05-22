@@ -1,5 +1,3 @@
-const std = @import("std");
-
 pub fn TypeList(current: anytype) type {
     comptime {
         switch (@typeInfo(@TypeOf(current))) {
@@ -29,6 +27,15 @@ pub fn TypeList(current: anytype) type {
             return TypeList(Self.items ++ .{T});
         }
 
+        test append {
+            const t = std.testing;
+
+            const list = TypeList(.{}).append(u8).append(u16);
+
+            try t.expectEqual(u8, list.items[0]);
+            try t.expectEqual(u16, list.items[1]);
+        }
+
         pub fn index(comptime T: type) ?usize {
             inline for (0.., items) |i, t| {
                 if (t == T) return i;
@@ -36,20 +43,17 @@ pub fn TypeList(current: anytype) type {
 
             return null;
         }
+
+        test index {
+            const t = std.testing;
+
+            const list = TypeList(.{ u8, u16, u8 });
+
+            try t.expectEqual(0, list.index(u8));
+            try t.expectEqual(1, list.index(u16));
+            try t.expectEqual(null, list.index(u32));
+        }
     };
 }
 
-test "append shall add the argument to the type" {
-    const type_list = TypeList(.{}).append(u8).append(u16);
-
-    try std.testing.expectEqual(u8, type_list.items[0]);
-    try std.testing.expectEqual(u16, type_list.items[1]);
-}
-
-test "index shall return the index of the type appearing first" {
-    const type_list = TypeList(.{ u8, u16, u8 });
-
-    try std.testing.expectEqual(0, type_list.index(u8));
-    try std.testing.expectEqual(1, type_list.index(u16));
-    try std.testing.expectEqual(null, type_list.index(u32));
-}
+const std = @import("std");
