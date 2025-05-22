@@ -1,7 +1,51 @@
-const std = @import("std");
+/// A State has to be initialized with a tuple of transitions.
+///
+/// A transition is a tuple that has the following fields
+///   - `.init`: bool (Optional)
+///   - `.src`: type
+///   - `.event`: type (Optional)
+///   - `.dst`: type (Optional)
+///   - `.guards`: A tuple of guards (Optional). A guard is a function or
+///     function pointer with the following signature:
+///     `fn (ctx: Context, event: anytype) bool`.
+///   - `.actions`: A tuple of actions (Optional). An action is a function or
+///     function pointer with the following signatures:
+///     - If there is no deferred event:
+///       `fn (ctx: *Context, event: anytype) !void`
+///     - Otherwise:
+///       `fn (ctx: *Context, event: anytype, deferrer: anytype) !Events`
+///
+/// - `Context` is the type of the variable being passed to the `.init` function.
+/// - `Events` is either `void` or a type whose has an `items` declaration that
+///   is a tuple of types.
+/// - `Later` is struct that has an `add` function that accepts all instances of
+///   types returned by `actions` in all the transitions.
+///
+/// At least 1 transition has to have `.init` being `true`.
+pub const State = CompositeState;
 
-const TypeList = @import("type_list.zig").TypeList;
-const coercible = @import("type.zig").coercible;
+fn CompositeState(
+    comptime transitions: anytype,
+    ContainerFn: fn (Events: type) type,
+) type {
+    comptime assertInits(transitions);
+
+    return struct {
+        pub const States = StatesFromTransitions(transitions);
+        pub const DeferredEvents = TaggedUnion(
+            DeferredEventsFromTransition(transitions).items,
+        );
+        pub const Container = ContainerFn(DeferredEvents);
+
+        pub fn create(ctx: anytype, container: *Container) StateMachine(
+            transitions,
+            std.meta.Child(@TypeOf(ctx)),
+            Container,
+        ) {
+            return .{ .ctx = ctx, .deferrer = .init(container) };
+        }
+    };
+}
 
 pub const Any = struct {};
 
@@ -167,33 +211,30 @@ fn assertActions(actions: anytype) void {
     }
 }
 
-pub fn assertTransition(transition: anytype) void {
-    const trans_type = @TypeOf(transition);
-    const trans_info = @typeInfo(trans_type);
+fn assertTransition(transition: anytype) void {
+    const Transition = @TypeOf(transition);
+    const info = @typeInfo(Transition);
 
-    if (trans_info != .@"struct") {
-        @compileError(std.fmt.comptimePrint(
-            "A transition has to be struct, a {} is found instead",
-            .{@TypeOf(transition)},
-        ));
+    if (info != .@"struct") {
+        @compileError(@typeName(@TypeOf(transition)) ++ " is not a tuple");
     }
 
-    if (@hasField(trans_type, "init") and @TypeOf(transition.init) != bool) {
+    if (@hasField(Transition, "init") and @TypeOf(transition.init) != bool) {
         @compileError("The `init` field has to be `bool`");
     }
 
-    if (!@hasField(trans_type, "src")) {
+    if (!@hasField(Transition, "src")) {
         @compileError("A transition has to has a `src` field");
     }
     if (@TypeOf(transition.src) != type) {
         @compileError("The `src` field has to be `type`");
     }
 
-    if (@hasField(trans_type, "event") and @TypeOf(transition.event) != type) {
+    if (@hasField(Transition, "event") and @TypeOf(transition.event) != type) {
         @compileError("The `event` field has to be `type`");
     }
 
-    if (@hasField(trans_type, "dst")) {
+    if (@hasField(Transition, "dst")) {
         if (@TypeOf(transition.dst) != type) {
             @compileError("The `dst` field has to be `type`");
         }
@@ -202,11 +243,11 @@ pub fn assertTransition(transition: anytype) void {
         }
     }
 
-    if (@hasField(trans_type, "guards")) {
+    if (@hasField(Transition, "guards")) {
         assertGuards(transition.guards);
     }
 
-    if (@hasField(trans_type, "actions")) {
+    if (@hasField(Transition, "actions")) {
         assertActions(transition.actions);
     }
 }
@@ -230,25 +271,14 @@ fn assertInits(transitions: anytype) void {
     }
 }
 
-fn assertResources(Resources: type) void {
-    switch (@typeInfo(Resources)) {
-        .@"struct" => |Res| {
-            if (!Res.is_tuple) {
-                @compileError("resources must be a tuple of values");
-            }
-        },
-        else => @compileError("resources must be a tuple of values"),
-    }
-}
-
-fn StateIndices(transitions: anytype) type {
+fn Regions(transitions: anytype) type {
     return [totalInits(transitions)]usize;
 }
 
-fn initStateIndices(transitions: anytype, type_list: type) StateIndices(transitions) {
+fn initRegions(transitions: anytype, type_list: type) Regions(transitions) {
     const inits = totalInits(transitions);
 
-    var result: StateIndices(transitions) = .{undefined} ** inits;
+    var result: Regions(transitions) = .{undefined} ** inits;
     var index = 0;
 
     for (transitions) |trans| {
@@ -265,7 +295,6 @@ fn initStateIndices(transitions: anytype, type_list: type) StateIndices(transiti
 fn TaggedUnion(events: anytype) type {
     const EnumField = std.builtin.Type.EnumField;
     const UnionField = std.builtin.Type.UnionField;
-    const comptimePrint = std.fmt.comptimePrint;
 
     const len = events.len;
 
@@ -309,23 +338,212 @@ test TaggedUnion {
     try t.expectEqual(true, (Event{ .@"1" = true }).@"1");
 }
 
-fn CompositeState(comptime transitions: anytype) type {
-    comptime assertInits(transitions);
-
+pub fn Deferrer(Event: type, Container: type) type {
     return struct {
-        pub fn init(resources: anytype) StateMachine(transitions, @TypeOf(resources)) {
-            return .{ .resources = resources };
+        const Self = @This();
+
+        container: *Container,
+
+        pub fn init(container: *Container) Self {
+            return .{ .container = container };
+        }
+
+        pub fn add(self: *const Self, event: anytype) !void {
+            const name = name: {
+                inline for (@typeInfo(Event).@"union".fields, 0..) |field, i| {
+                    if (field == @TypeOf(event)) {
+                        break :name comptimePrint("{}", i);
+                    }
+                }
+                @compileError(
+                    @typeName(@TypeOf(Event) ++ " does not exist in the deferred event list"),
+                );
+            };
+            self.container.append(@unionInit(Event, name, event));
+        }
+
+        pub fn remove(self: *const Self) Event {
+            return self.container.orderRemove(0);
         }
     };
 }
 
-// A State has to be initialized with a tuple of transitions
-// A transition is a tuple that has the following fields
-//      .init: bool (Optional)
-//      .src: type
-//      .event: type (Optional)
-//      .dst: type (Optional)
-//      .guards: tuple of fn or *fn (Optional)
-//      .actions: tuple of fn or *fn (Optional)
-// At least 1 transition has to have .init = true
-pub const State = CompositeState;
+fn hasError(func: anytype) bool {
+    const Func = @TypeOf(func);
+    switch (@typeInfo(@typeInfo(Func).@"fn".return_type.?)) {
+        .error_union => return true,
+        else => return false,
+    }
+}
+
+fn StateMachine(
+    comptime transitions: anytype,
+    Context: type,
+    Container: type,
+) type {
+    return struct {
+        const Self = @This();
+
+        const States = StatesFromTransitions(transitions);
+        const DeferredEvents = TaggedUnion(
+            DeferredEventsFromTransition(transitions).items,
+        );
+
+        regions: Regions(transitions) = initRegions(transitions, States),
+        ctx: if (Context == void) void else *Context,
+        deferrer: Deferrer(DeferredEvents, Container),
+
+        pub inline fn process(self: *Self, event: anytype) !void {
+            _ = try self.detailedProcess(event);
+        }
+
+        pub fn detailedProcess(self: *Self, event: anytype) !bool {
+            var processed = false;
+
+            inline for (0.., self.regions) |region, state| {
+                inline for (transitions) |trans| {
+                    if (try self.handleState(trans, event, state) and
+                        comptime @hasField(@TypeOf(trans), "dst"))
+                    {
+                        self.regions[region] = States.index(trans.dst).?;
+                        processed = true;
+                    }
+                }
+            }
+
+            return processed;
+        }
+
+        inline fn handleState(
+            self: *Self,
+            trans: anytype,
+            event: anytype,
+            state: usize,
+        ) !bool {
+            const Trans = @TypeOf(trans);
+            const Event = @TypeOf(event);
+
+            const index = comptime States.index(trans.src).?;
+            if (index != state and comptime trans.src != Any) {
+                return false;
+            }
+
+            if (comptime !@hasField(Trans, "event")) {
+                return false;
+            }
+
+            if (comptime trans.event != Event and trans.event != Any) {
+                return false;
+            }
+
+            if (comptime @hasField(Trans, "guards")) {
+                inline for (trans.guards) |guard| {
+                    const Guard = @TypeOf(guard);
+                    const info = @typeInfo(Guard).@"fn";
+
+                    switch (info.params.len) {
+                        0 => if (!guard()) return false,
+                        1 => if (!guard(self.ctx)) return false,
+                        2 => if (!guard(self.ctx, event)) return false,
+                        else => @compileError(
+                            @typeName(Guard) ++ " is an invalid guard",
+                        ),
+                    }
+                }
+            }
+
+            if (comptime @hasField(Trans, "actions")) {
+                inline for (trans.actions) |action| {
+                    const info = @typeInfo(@TypeOf(action)).@"fn";
+                    const args = switch (info.params.len) {
+                        1 => .{self.ctx},
+                        2 => .{ self.ctx, event },
+                        3 => .{ self.ctx, event, self.deferrer },
+                        else => @compileError(
+                            @typeName(@TypeOf(action)) ++ " is an invalid action",
+                        ),
+                    };
+
+                    if (comptime hasError(action)) {
+                        try @call(.auto, action, args);
+                    } else {
+                        @call(.auto, action, args);
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        pub fn is(self: *const Self, current: type) bool {
+            if (comptime States.index(current)) |index| {
+                for (self.regions) |stateIndex| {
+                    if (index == stateIndex) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            @compileError(
+                @typeName(current) ++ " does not exist in the state machine",
+            );
+        }
+    };
+}
+
+test StateMachine {
+    const t = std.testing;
+
+    const Context = struct {
+        const Self = @This();
+
+        value: u8,
+
+        fn increment(self: *Self) void {
+            self.value += 1;
+        }
+        fn incrementFail(self: *Self) !void {
+            self.value += 1;
+
+            return error.ShouldFail;
+        }
+    };
+
+    const S1 = struct {};
+    const S2 = struct {};
+
+    const SM = State(.{
+        .{ .init = true, .src = S1, .event = u8, .dst = S2, .actions = .{Context.increment} },
+        .{ .src = S1, .event = bool, .dst = S2, .actions = .{Context.incrementFail} },
+
+        .{ .src = S2, .event = u8, .dst = S1, .actions = .{Context.increment} },
+    }, std.ArrayList);
+
+    var context: Context = .{ .value = 0 };
+
+    var container: SM.Container = .init(t.allocator);
+    defer container.deinit();
+
+    var sm = SM.create(&context, &container);
+
+    try t.expect(sm.is(S1));
+
+    try sm.process(@as(u8, 1));
+    try t.expect(sm.is(S2));
+    try t.expectEqual(1, context.value);
+
+    try sm.process(@as(u8, 1));
+    try t.expect(sm.is(S1));
+    try t.expectEqual(2, context.value);
+
+    try t.expectEqual(error.ShouldFail, sm.process(true));
+    try t.expect(sm.is(S1));
+    try t.expectEqual(3, context.value);
+}
+
+const std = @import("std");
+const comptimePrint = std.fmt.comptimePrint;
+
+const hsm = @import("root.zig");
+const TypeList = hsm.TypeList;

@@ -10,5 +10,4 @@ comptime {
 
     testing.refAllDecls(type_list);
     testing.refAllDecls(state);
-    testing.refAllDecls(@import("type.zig"));
 }
