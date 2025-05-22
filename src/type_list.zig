@@ -21,14 +21,16 @@ pub fn TypeList(current: anytype) type {
     }
 
     return struct {
-        const types = current;
+        const Self = @This();
 
-        pub fn append(T: type) @TypeOf(TypeList(@This().types ++ .{T})) {
-            return TypeList(@This().types ++ .{T});
+        pub const items = current;
+
+        pub fn append(T: type) @TypeOf(TypeList(Self.items ++ .{T})) {
+            return TypeList(Self.items ++ .{T});
         }
 
         pub fn index(comptime T: type) ?usize {
-            inline for (0.., types) |i, t| {
+            inline for (0.., items) |i, t| {
                 if (t == T) return i;
             }
 
@@ -40,8 +42,8 @@ pub fn TypeList(current: anytype) type {
 test "append shall add the argument to the type" {
     const type_list = TypeList(.{}).append(u8).append(u16);
 
-    try std.testing.expectEqual(u8, type_list.types[0]);
-    try std.testing.expectEqual(u16, type_list.types[1]);
+    try std.testing.expectEqual(u8, type_list.items[0]);
+    try std.testing.expectEqual(u16, type_list.items[1]);
 }
 
 test "index shall return the index of the type appearing first" {
