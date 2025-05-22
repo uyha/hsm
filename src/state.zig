@@ -19,6 +19,81 @@ fn StatesFromTransitions(transitions: anytype) type {
     return result;
 }
 
+fn DeferredEventsFromTransition(transitions: anytype) type {
+    comptime var events = TypeList(.{});
+
+    inline for (transitions) |trans| {
+        if (!@hasField(@TypeOf(trans), "actions")) {
+            continue;
+        }
+
+        const actions = trans.actions;
+        action: inline for (actions) |action| {
+            const ReturnType = @typeInfo(@TypeOf(action)).@"fn".return_type.?;
+
+            var Type = ReturnType;
+
+            const items = items: switch (@typeInfo(Type)) {
+                .void => continue :action,
+                .error_union => |info| {
+                    Type = info.payload;
+                    continue :items @typeInfo(Type);
+                },
+                .@"struct" => Type.items,
+                else => @compileError(
+                    @typeName(ReturnType) ++ " is not supported",
+                ),
+            };
+
+            append: inline for (items) |T| {
+                inline for (events.items) |item| {
+                    if (T == item) {
+                        continue :append;
+                    }
+                }
+
+                events = events.append(T);
+            }
+        }
+    }
+
+    return events;
+}
+
+test DeferredEventsFromTransition {
+    const just_void = struct {
+        fn f() void {}
+    }.f;
+    const err_void = struct {
+        fn f() error{}!void {}
+    }.f;
+    const ret_i32 = struct {
+        fn f() TypeList(.{i32}) {}
+    }.f;
+    const err_i32 = struct {
+        fn f() error{OutOfMemory}!TypeList(.{i32}) {}
+    }.f;
+    const ret_f32 = struct {
+        fn f() TypeList(.{f32}) {}
+    }.f;
+    const err_f32 = struct {
+        fn f() error{}!TypeList(.{f32}) {}
+    }.f;
+
+    const t = std.testing;
+
+    const Events = DeferredEventsFromTransition(.{
+        .{ .actions = .{ just_void, err_void } },
+        .{ .actions = .{ ret_i32, err_i32 } },
+        .{ .actions = .{ ret_i32, err_i32 } },
+        .{ .actions = .{ ret_f32, err_f32 } },
+    });
+
+    try t.expectEqual(2, Events.items.len);
+    try t.expect(Events.index(i32) != null);
+    try t.expect(Events.index(f32) != null);
+}
+
 fn assertPredicate(Guard: type) void {
     switch (@typeInfo(Guard)) {
         .@"fn" => |func| {
