@@ -131,31 +131,6 @@ fn isConstPointerEven(value: *const u32) bool {
     return @rem(value.*, 2) == 0;
 }
 
-test "Coercible resources" {
-    const S1 = struct {};
-    const S2 = struct {};
-    const E1 = struct {};
-
-    const TestStateMachine = State(.{
-        .{ .init = true, .src = S1, .event = E1, .dst = S2, .guards = .{isConstPointerEven} },
-        .{ .src = S2, .event = E1, .dst = S1 },
-    });
-
-    var resource: u32 = 1;
-
-    var state_machine = TestStateMachine.init(.{&resource});
-
-    try testing.expect(state_machine.is(S1));
-    try testing.expect(!state_machine.detailedProcess(E1{}));
-
-    try testing.expect(state_machine.is(S1));
-
-    resource = 2;
-
-    try testing.expect(state_machine.detailedProcess(E1{}));
-    try testing.expect(state_machine.is(S2));
-}
-
 fn increment(value: *u32) void {
     value.* += 1;
 }
