@@ -261,182 +261,52 @@ fn initStateIndices(transitions: anytype, type_list: type) StateIndices(transiti
     return result;
 }
 
-fn isStateMachine(comptime T: type) bool {
-    if (!@hasDecl(T, "detailedProcess")) {
-        return false;
+/// `events` has to be a tuple of types.
+fn TaggedUnion(events: anytype) type {
+    const EnumField = std.builtin.Type.EnumField;
+    const UnionField = std.builtin.Type.UnionField;
+    const comptimePrint = std.fmt.comptimePrint;
+
+    const len = events.len;
+
+    if (len == 0) {
+        return void;
     }
 
-    const detailedProcess = @typeInfo(@TypeOf(T.detailedProcess));
+    var enum_fields: [len]EnumField = undefined;
+    var union_fields: [len]UnionField = undefined;
 
-    switch (detailedProcess) {
-        .@"fn" => |func| {
-            if (func.return_type != bool) {
-                return false;
-            }
-            if (func.params.len != 2) {
-                return false;
-            }
-            if (func.params[0].type != *T) {
-                return false;
-            }
-            if (!func.params[1].is_generic) {
-                return false;
-            }
-        },
-        else => return false,
+    inline for (events, 0..) |Event, i| {
+        const name = comptimePrint("{}", .{i});
+        enum_fields[i] = .{ .name = name, .value = i };
+        union_fields[i] = .{
+            .name = name,
+            .type = Event,
+            .alignment = @alignOf(Event),
+        };
     }
 
-    return true;
+    const Tag = @Type(.{ .@"enum" = .{
+        .tag_type = std.math.IntFittingRange(0, len),
+        .fields = &enum_fields,
+        .is_exhaustive = true,
+        .decls = &.{},
+    } });
+    return @Type(.{ .@"union" = .{
+        .layout = .auto,
+        .tag_type = Tag,
+        .fields = &union_fields,
+        .decls = &.{},
+    } });
 }
 
-test "`isStateMachine` accurately determines if a type is a state machine" {
-    const testing = std.testing;
+test TaggedUnion {
+    const t = std.testing;
 
-    const state_machine = State(
-        .{
-            .{ .init = true, .src = bool },
-        },
-    ).init(.{});
+    const Event = TaggedUnion(.{ i8, bool });
 
-    try testing.expect(isStateMachine(@TypeOf(state_machine)));
-    try testing.expect(!isStateMachine(struct {
-        pub const detailedProcess = 1;
-    }));
-    try testing.expect(!isStateMachine(struct {
-        pub fn detailedProcess() void {}
-    }));
-    try testing.expect(!isStateMachine(struct {
-        pub fn detailedProcess() bool {}
-    }));
-    try testing.expect(!isStateMachine(struct {
-        pub fn detailedProcess(_: bool, _: bool) bool {}
-    }));
-    try testing.expect(!isStateMachine(struct {
-        pub fn detailedProcess(_: *@This(), _: bool) bool {}
-    }));
-    try testing.expect(isStateMachine(struct {
-        pub fn detailedProcess(_: *@This(), _: anytype) bool {}
-    }));
-}
-
-fn StateMachine(comptime transitions: anytype, Resources: type) type {
-    comptime assertResources(Resources);
-
-    return struct {
-        const Self = @This();
-        const States = StatesFromTransitions(transitions);
-
-        stateIndices: StateIndices(transitions) = initStateIndices(transitions, States),
-        resources: Resources,
-
-        pub fn process(self: *Self, event: anytype) void {
-            _ = self.detailedProcess(event);
-        }
-
-        pub fn detailedProcess(self: *Self, event: anytype) bool {
-            var processed = false;
-
-            region: for (0.., self.stateIndices) |index, stateIndex| {
-                inline for (transitions) |trans| {
-                    if (States.index(trans.src).? == stateIndex or
-                        (comptime trans.src == Any))
-                    {
-                        const Trans = @TypeOf(trans);
-                        if (comptime @hasField(Trans, "event") and
-                            @TypeOf(event) == trans.event or
-                            trans.event == Any)
-                        {
-                            var passed = true;
-                            if (comptime @hasField(Trans, "guards")) {
-                                inline for (trans.guards) |guard| {
-                                    if (passed) {
-                                        passed = passed and self.invoke(guard, event);
-                                    }
-                                }
-                            }
-                            if (passed) {
-                                processed = true;
-
-                                if (comptime @hasField(Trans, "actions")) {
-                                    inline for (trans.actions) |action| {
-                                        self.invoke(action, event);
-                                    }
-                                }
-
-                                if (@hasField(@TypeOf(trans), "dst")) {
-                                    self.stateIndices[index] = States.index(trans.dst).?;
-                                }
-                                continue :region;
-                            }
-                        }
-                    }
-                }
-            }
-
-            return processed;
-        }
-
-        pub fn is(self: *const Self, current: type) bool {
-            const index = States.index(current);
-            for (self.stateIndices) |stateIndex| {
-                if (index == stateIndex) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        fn ReturnType(comptime info: std.builtin.Type) type {
-            return switch (info) {
-                .pointer => |ptr| @typeInfo(ptr.child).@"fn".return_type.?,
-                .@"fn" => |func| func.return_type.?,
-                else => unreachable,
-            };
-        }
-
-        fn invoke(
-            self: *const Self,
-            func: anytype,
-            event: anytype,
-        ) ReturnType(@typeInfo(@TypeOf(func))) {
-            const Fn = switch (@typeInfo(@TypeOf(func))) {
-                .pointer => |ptr| ptr.child,
-                .@"fn" => @TypeOf(func),
-                else => unreachable,
-            };
-            const Args = std.meta.ArgsTuple(Fn);
-            const len = @typeInfo(Args).@"struct".fields.len;
-
-            var args: Args = if (len == 0) .{} else .{undefined} ** len;
-
-            search: inline for (0.., @typeInfo(Args).@"struct".fields) |i, Arg| {
-                if (comptime Arg.type == @TypeOf(event)) {
-                    args[i] = event;
-                    continue :search;
-                }
-
-                inline for (self.resources) |resource| {
-                    if (comptime Arg.type == @TypeOf(resource)) {
-                        args[i] = resource;
-                        continue :search;
-                    }
-                }
-
-                inline for (self.resources) |resource| {
-                    if (comptime coercible(@TypeOf(resource), Arg.type)) {
-                        args[i] = resource;
-                        continue :search;
-                    }
-                }
-
-                @compileError(
-                    std.fmt.comptimePrint("{} not available\n", .{Arg.type}),
-                );
-            }
-
-            return @call(.auto, func, args);
-        }
-    };
+    try t.expectEqual(8, (Event{ .@"0" = 8 }).@"0");
+    try t.expectEqual(true, (Event{ .@"1" = true }).@"1");
 }
 
 fn CompositeState(comptime transitions: anytype) type {
