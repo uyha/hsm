@@ -528,102 +528,102 @@ fn StateMachine(
     };
 }
 
-// test StateMachine {
-//     const t = std.testing;
-//
-//     const Download = struct {
-//         const Self = @This();
-//
-//         const Done = struct {};
-//         const Failed = struct {};
-//
-//         started: bool = false,
-//         progress: u8 = 0,
-//         random_gen: std.Random.DefaultPrng,
-//         result: ?enum { success, failure } = null,
-//
-//         pub fn init() Self {
-//             return .{
-//                 .random_gen = .init(@intCast(std.time.milliTimestamp())),
-//             };
-//         }
-//
-//         fn start(self: *Self) void {
-//             self.started = true;
-//         }
-//
-//         fn getMore(self: *Self, _: anytype, deferrer: anytype) !TypeList(.{ Done, Failed }) {
-//             self.progress += 1;
-//
-//             if (self.progress == 100) {
-//                 if (self.random_gen.random().boolean()) {
-//                     self.result = .success;
-//                     try deferrer.add(Done{});
-//                 } else {
-//                     self.result = .failure;
-//                     try deferrer.add(Failed{});
-//                 }
-//             }
-//
-//             return .init;
-//         }
-//
-//         fn abort(self: *Self) void {
-//             self.started = false;
-//             self.progress = 0;
-//             self.result = null;
-//         }
-//     };
-//
-//     const Waiting = struct {};
-//     const Downloading = struct {};
-//     const Success = struct {};
-//     const Failure = struct {};
-//     const Aborted = struct {};
-//
-//     const Start = struct {};
-//     const Resume = struct {};
-//     const Abort = struct {};
-//
-//     const SM = State(.{
-//         .{ .init = true, .src = Waiting, .event = Start, .acts = .{Download.start}, .dst = Downloading },
-//
-//         .{ .src = Downloading, .event = Resume, .acts = .{Download.getMore} },
-//         .{ .src = Downloading, .event = Download.Done, .dst = Success },
-//         .{ .src = Downloading, .event = Download.Failed, .dst = Failure },
-//
-//         .{ .src = Any, .event = Abort, .acts = .{Download.abort}, .dst = Aborted },
-//     });
-//
-//     var container: std.ArrayList(SM.DeferredEvent) = .init(t.allocator);
-//     defer container.deinit();
-//
-//     var download: Download = .init();
-//     var sm = SM.create(&download, &container);
-//
-//     try t.expect(sm.is(Waiting));
-//
-//     try sm.process(Start{});
-//     try t.expect(sm.is(Downloading));
-//     try t.expect(download.started);
-//
-//     for (1..100) |i| {
-//         try sm.process(Resume{});
-//         try t.expect(sm.is(Downloading));
-//         try t.expectEqual(i, download.progress);
-//     }
-//
-//     try sm.process(Resume{});
-//     try t.expect(null != download.result);
-//     switch (download.result.?) {
-//         .success => try t.expect(sm.is(Success)),
-//         .failure => try t.expect(sm.is(Failure)),
-//     }
-//
-//     try sm.process(Abort{});
-//     try t.expect(null == download.result);
-//     try t.expect(sm.is(Aborted));
-// }
+test StateMachine {
+    const t = std.testing;
+
+    const Download = struct {
+        const Self = @This();
+
+        const Done = struct {};
+        const Failed = struct {};
+
+        started: bool = false,
+        progress: u8 = 0,
+        random_gen: std.Random.DefaultPrng,
+        result: ?enum { success, failure } = null,
+
+        pub fn init() Self {
+            return .{
+                .random_gen = .init(@intCast(std.time.milliTimestamp())),
+            };
+        }
+
+        fn start(self: *Self) void {
+            self.started = true;
+        }
+
+        fn getMore(self: *Self, _: anytype, deferrer: anytype) !TypeList(.{ Done, Failed }) {
+            self.progress += 1;
+
+            if (self.progress == 100) {
+                if (self.random_gen.random().boolean()) {
+                    self.result = .success;
+                    try deferrer.add(Done{});
+                } else {
+                    self.result = .failure;
+                    try deferrer.add(Failed{});
+                }
+            }
+
+            return .init;
+        }
+
+        fn abort(self: *Self) void {
+            self.started = false;
+            self.progress = 0;
+            self.result = null;
+        }
+    };
+
+    const Waiting = struct {};
+    const Downloading = struct {};
+    const Success = struct {};
+    const Failure = struct {};
+    const Aborted = struct {};
+
+    const Start = struct {};
+    const Resume = struct {};
+    const Abort = struct {};
+
+    const SM = State(.{
+        .{ .init = true, .src = Waiting, .event = Start, .acts = .{Download.start}, .dst = Downloading },
+
+        .{ .src = Downloading, .event = Resume, .acts = .{Download.getMore} },
+        .{ .src = Downloading, .event = Download.Done, .dst = Success },
+        .{ .src = Downloading, .event = Download.Failed, .dst = Failure },
+
+        .{ .src = Any, .event = Abort, .acts = .{Download.abort}, .dst = Aborted },
+    });
+
+    var container: std.ArrayList(SM.DeferredEvent) = .init(t.allocator);
+    defer container.deinit();
+
+    var download: Download = .init();
+    var sm = SM.create(&download, &container);
+
+    try t.expect(sm.is(Waiting));
+
+    try sm.process(Start{});
+    try t.expect(sm.is(Downloading));
+    try t.expect(download.started);
+
+    for (1..100) |i| {
+        try sm.process(Resume{});
+        try t.expect(sm.is(Downloading));
+        try t.expectEqual(i, download.progress);
+    }
+
+    try sm.process(Resume{});
+    try t.expect(null != download.result);
+    switch (download.result.?) {
+        .success => try t.expect(sm.is(Success)),
+        .failure => try t.expect(sm.is(Failure)),
+    }
+
+    try sm.process(Abort{});
+    try t.expect(null == download.result);
+    try t.expect(sm.is(Aborted));
+}
 
 const std = @import("std");
 const comptimePrint = std.fmt.comptimePrint;
