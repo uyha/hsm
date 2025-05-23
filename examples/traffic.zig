@@ -1,6 +1,3 @@
-const std = @import("std");
-const hsm = @import("root.zig");
-
 const State = hsm.State;
 const Any = hsm.Any;
 
@@ -65,11 +62,5 @@ fn @"Traffic light"() !void {
     std.debug.print("Ticks: {}\n", .{count.ticks});
 }
 
-fn @"Bootloader to kernel"() void {
-    const @"Power On" = struct {};
-
-    const @"Boot Sequence" = struct {};
-
-    _ = @"Power On";
-    _ = @"Boot Sequence";
-}
+const std = @import("std");
+const hsm = @import("hsm");
