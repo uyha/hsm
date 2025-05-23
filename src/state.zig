@@ -67,7 +67,143 @@ fn CompositeState(comptime transitions: anytype) type {
     };
 }
 
+fn StateMachine(
+    comptime transitions: anytype,
+    Context: type,
+    Container: type,
+) type {
+    return struct {
+        const Self = @This();
+
+        const States = StatesFromTransitions(transitions);
+        const deferred_events = DeferredEventsFromTransition(transitions).items;
+        const DeferredEvent = TaggedUnion(deferred_events);
+        const Deferrer = DeferrerType(deferred_events, Container);
+
+        regions: Regions(transitions) = initRegions(transitions, States),
+        ctx: if (Context == void) void else *Context,
+        deferrer: Deferrer,
+
+        pub inline fn process(self: *Self, event: anytype) anyerror!void {
+            _ = try self.detailedProcess(event);
+        }
+
+        pub fn detailedProcess(self: *Self, event: anytype) anyerror!bool {
+            var processed = false;
+
+            region: for (0.., self.regions) |region, state| {
+                inline for (transitions) |trans| {
+                    if (try self.handleState(trans, event, state)) {
+                        if (comptime @hasField(@TypeOf(trans), "dst")) {
+                            self.regions[region] = States.index(trans.dst).?;
+                        }
+                        processed = true;
+
+                        continue :region;
+                    }
+                }
+            }
+
+            if (comptime Deferrer != void) {
+                while (self.deferrer.remove()) |deferred_event| {
+                    switch (deferred_event) {
+                        inline else => |payload| {
+                            _ = try self.detailedProcess(payload);
+                        },
+                    }
+                }
+            }
+
+            return processed;
+        }
+
+        inline fn handleState(
+            self: *Self,
+            trans: anytype,
+            event: anytype,
+            state: usize,
+        ) !bool {
+            const Trans = @TypeOf(trans);
+            const Event = @TypeOf(event);
+
+            const index = comptime States.index(trans.src).?;
+            if (index != state and comptime trans.src != Any) {
+                return false;
+            }
+
+            if (comptime !@hasField(Trans, "event")) {
+                return false;
+            }
+
+            if (comptime trans.event != Event and trans.event != Any) {
+                return false;
+            }
+
+            if (comptime @hasField(Trans, "guards")) {
+                inline for (trans.guards) |guard| {
+                    const Guard = @TypeOf(guard);
+                    const info = @typeInfo(Guard).@"fn";
+
+                    switch (info.params.len) {
+                        0 => if (!guard()) return false,
+                        1 => if (!guard(self.ctx)) return false,
+                        2 => if (!guard(self.ctx, event)) return false,
+                        else => @compileError(
+                            @typeName(Guard) ++ " is an invalid guard",
+                        ),
+                    }
+                }
+            }
+
+            if (comptime @hasField(Trans, "acts")) {
+                inline for (trans.acts) |action| {
+                    const info = @typeInfo(@TypeOf(action)).@"fn";
+                    const args = switch (info.params.len) {
+                        0 => .{},
+                        1 => .{self.ctx},
+                        2 => .{ self.ctx, event },
+                        3 => .{ self.ctx, event, self.deferrer },
+                        else => @compileError(
+                            @typeName(@TypeOf(action)) ++ " is an invalid action",
+                        ),
+                    };
+
+                    if (comptime hasError(action)) {
+                        _ = try @call(.auto, action, args);
+                    } else {
+                        _ = @call(.auto, action, args);
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        pub fn is(self: *const Self, current: type) bool {
+            if (comptime States.index(current)) |index| {
+                for (self.regions) |stateIndex| {
+                    if (index == stateIndex) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            @compileError(
+                @typeName(current) ++ " does not exist in the state machine",
+            );
+        }
+    };
+}
 pub const Any = struct {};
+
+fn hasError(func: anytype) bool {
+    const Func = @TypeOf(func);
+    switch (@typeInfo(@typeInfo(Func).@"fn".return_type.?)) {
+        .error_union => return true,
+        else => return false,
+    }
+}
 
 fn StatesFromTransitions(transitions: anytype) type {
     comptime var result = TypeList(.{});
@@ -429,143 +565,6 @@ pub fn DeferrerType(events: anytype, Container: type) type {
             } else {
                 return null;
             }
-        }
-    };
-}
-
-fn hasError(func: anytype) bool {
-    const Func = @TypeOf(func);
-    switch (@typeInfo(@typeInfo(Func).@"fn".return_type.?)) {
-        .error_union => return true,
-        else => return false,
-    }
-}
-
-fn StateMachine(
-    comptime transitions: anytype,
-    Context: type,
-    Container: type,
-) type {
-    return struct {
-        const Self = @This();
-
-        const States = StatesFromTransitions(transitions);
-        const deferred_events = DeferredEventsFromTransition(transitions).items;
-        const DeferredEvent = TaggedUnion(deferred_events);
-        const Deferrer = DeferrerType(deferred_events, Container);
-
-        regions: Regions(transitions) = initRegions(transitions, States),
-        ctx: if (Context == void) void else *Context,
-        deferrer: Deferrer,
-
-        pub inline fn process(self: *Self, event: anytype) anyerror!void {
-            _ = try self.detailedProcess(event);
-        }
-
-        pub fn detailedProcess(self: *Self, event: anytype) anyerror!bool {
-            var processed = false;
-
-            region: for (0.., self.regions) |region, state| {
-                inline for (transitions) |trans| {
-                    if (try self.handleState(trans, event, state)) {
-                        if (comptime @hasField(@TypeOf(trans), "dst")) {
-                            self.regions[region] = States.index(trans.dst).?;
-                        }
-                        processed = true;
-
-                        continue :region;
-                    }
-                }
-            }
-
-            if (comptime Deferrer != void) {
-                while (self.deferrer.remove()) |deferred_event| {
-                    switch (deferred_event) {
-                        inline else => |payload| {
-                            _ = try self.detailedProcess(payload);
-                        },
-                    }
-                }
-            }
-
-            return processed;
-        }
-
-        inline fn handleState(
-            self: *Self,
-            trans: anytype,
-            event: anytype,
-            state: usize,
-        ) !bool {
-            const Trans = @TypeOf(trans);
-            const Event = @TypeOf(event);
-
-            const index = comptime States.index(trans.src).?;
-            if (index != state and comptime trans.src != Any) {
-                return false;
-            }
-
-            if (comptime !@hasField(Trans, "event")) {
-                return false;
-            }
-
-            if (comptime trans.event != Event and trans.event != Any) {
-                return false;
-            }
-
-            if (comptime @hasField(Trans, "guards")) {
-                inline for (trans.guards) |guard| {
-                    const Guard = @TypeOf(guard);
-                    const info = @typeInfo(Guard).@"fn";
-
-                    switch (info.params.len) {
-                        0 => if (!guard()) return false,
-                        1 => if (!guard(self.ctx)) return false,
-                        2 => if (!guard(self.ctx, event)) return false,
-                        else => @compileError(
-                            @typeName(Guard) ++ " is an invalid guard",
-                        ),
-                    }
-                }
-            }
-
-            if (comptime @hasField(Trans, "acts")) {
-                inline for (trans.acts) |action| {
-                    const info = @typeInfo(@TypeOf(action)).@"fn";
-                    const args = switch (info.params.len) {
-                        0 => .{},
-                        1 => .{self.ctx},
-                        2 => .{ self.ctx, event },
-                        3 => .{ self.ctx, event, self.deferrer },
-                        else => @compileError(
-                            @typeName(@TypeOf(action)) ++ " is an invalid action",
-                        ),
-                    };
-
-                    if (comptime hasError(action)) {
-                        _ = try @call(.auto, action, args);
-                    } else {
-                        _ = @call(.auto, action, args);
-                    }
-                }
-            }
-
-            return true;
-        }
-
-        pub fn is(self: *const Self, current: type) bool {
-            if (comptime States.index(current)) |index| {
-                for (self.regions) |stateIndex| {
-                    if (index == stateIndex) {
-                        return true;
-                    }
-                }
-                return false;
-            }
-
-            @compileError(
-                @typeName(current) ++ " does not exist in the state machine",
-            );
         }
     };
 }
