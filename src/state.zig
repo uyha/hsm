@@ -8,7 +8,7 @@
 ///   - `.guards`: A tuple of guards (Optional). A guard is a function or
 ///     function pointer with the following signature:
 ///     `fn (ctx: Context, event: anytype) bool`.
-///   - `.actions`: A tuple of actions (Optional). An action is a function or
+///   - `.acts`: A tuple of acts (Optional). An action is a function or
 ///     function pointer with the following signatures:
 ///     - If there is no deferred event:
 ///       `fn (ctx: *Context, event: anytype) !void`
@@ -19,30 +19,41 @@
 /// - `Events` is either `void` or a type whose has an `items` declaration that
 ///   is a tuple of types.
 /// - `Later` is struct that has an `add` function that accepts all instances of
-///   types returned by `actions` in all the transitions.
+///   types returned by `acts` in all the transitions.
 ///
 /// At least 1 transition has to have `.init` being `true`.
 pub const State = CompositeState;
 
-fn CompositeState(
-    comptime transitions: anytype,
-    ContainerFn: fn (Events: type) type,
-) type {
+fn CompositeState(comptime transitions: anytype) type {
     comptime assertInits(transitions);
 
     return struct {
         pub const States = StatesFromTransitions(transitions);
-        pub const DeferredEvents = TaggedUnion(
-            DeferredEventsFromTransition(transitions).items,
-        );
-        pub const Container = ContainerFn(DeferredEvents);
+        pub const deferred_events = DeferredEventsFromTransition(transitions).items;
+        pub const DeferredEvent = if (deferred_events.len == 0) void else TaggedUnion(deferred_events);
 
-        pub fn create(ctx: anytype, container: *Container) StateMachine(
+        pub const create = if (deferred_events.len == 0)
+            createNoContainer
+        else
+            createWithDeferContainer;
+
+        fn createWithDeferContainer(
+            ctx: anytype,
+            container: anytype,
+        ) StateMachine(
             transitions,
             std.meta.Child(@TypeOf(ctx)),
-            Container,
+            std.meta.Child(@TypeOf(container)),
         ) {
             return .{ .ctx = ctx, .deferrer = .init(container) };
+        }
+
+        fn createNoContainer(ctx: anytype) StateMachine(
+            transitions,
+            std.meta.Child(@TypeOf(ctx)),
+            void,
+        ) {
+            return .{ .ctx = ctx, .deferrer = {} };
         }
     };
 }
@@ -67,12 +78,12 @@ fn DeferredEventsFromTransition(transitions: anytype) type {
     comptime var events = TypeList(.{});
 
     inline for (transitions) |trans| {
-        if (!@hasField(@TypeOf(trans), "actions")) {
+        if (!@hasField(@TypeOf(trans), "acts")) {
             continue;
         }
 
-        const actions = trans.actions;
-        action: inline for (actions) |action| {
+        const acts = trans.acts;
+        action: inline for (acts) |action| {
             const ReturnType = @typeInfo(@TypeOf(action)).@"fn".return_type.?;
 
             var Type = ReturnType;
@@ -127,10 +138,10 @@ test DeferredEventsFromTransition {
     const t = std.testing;
 
     const Events = DeferredEventsFromTransition(.{
-        .{ .actions = .{ just_void, err_void } },
-        .{ .actions = .{ ret_i32, err_i32 } },
-        .{ .actions = .{ ret_i32, err_i32 } },
-        .{ .actions = .{ ret_f32, err_f32 } },
+        .{ .acts = .{ just_void, err_void } },
+        .{ .acts = .{ ret_i32, err_i32 } },
+        .{ .acts = .{ ret_i32, err_i32 } },
+        .{ .acts = .{ ret_f32, err_f32 } },
     });
 
     try t.expectEqual(2, Events.items.len);
@@ -190,14 +201,14 @@ fn assertAction(Action: type) void {
     }
 }
 
-fn assertActions(actions: anytype) void {
-    switch (@typeInfo(@TypeOf(actions))) {
+fn assertActions(acts: anytype) void {
+    switch (@typeInfo(@TypeOf(acts))) {
         .@"struct" => |t| {
             if (!t.is_tuple) {
                 @compileError("A tuple of functions / function pointers is expected");
             }
 
-            for (actions) |action| {
+            for (acts) |action| {
                 switch (@typeInfo(@TypeOf(action))) {
                     .pointer => |ptr| assertAction(ptr.child),
                     else => assertAction(@TypeOf(action)),
@@ -247,8 +258,8 @@ fn assertTransition(transition: anytype) void {
         assertGuards(transition.guards);
     }
 
-    if (@hasField(Transition, "actions")) {
-        assertActions(transition.actions);
+    if (@hasField(Transition, "acts")) {
+        assertActions(transition.acts);
     }
 }
 
@@ -338,9 +349,12 @@ test TaggedUnion {
     try t.expectEqual(true, (Event{ .@"1" = true }).@"1");
 }
 
-pub fn Deferrer(Event: type, Container: type) type {
+pub fn Deferrer(events: anytype, Container: type) type {
+    if (events.len == 0) return void;
+
     return struct {
         const Self = @This();
+        const DeferredEvent = TaggedUnion(events);
 
         container: *Container,
 
@@ -350,20 +364,24 @@ pub fn Deferrer(Event: type, Container: type) type {
 
         pub fn add(self: *const Self, event: anytype) !void {
             const name = name: {
-                inline for (@typeInfo(Event).@"union".fields, 0..) |field, i| {
-                    if (field == @TypeOf(event)) {
-                        break :name comptimePrint("{}", i);
+                inline for (events, 0..) |Event, i| {
+                    if (@TypeOf(event) == Event) {
+                        break :name comptimePrint("{}", .{i});
                     }
                 }
                 @compileError(
-                    @typeName(@TypeOf(Event) ++ " does not exist in the deferred event list"),
+                    @typeName(@TypeOf(event)) ++ " does not exist in the deferred event list",
                 );
             };
-            self.container.append(@unionInit(Event, name, event));
+            try self.container.append(@unionInit(DeferredEvent, name, event));
         }
 
-        pub fn remove(self: *const Self) Event {
-            return self.container.orderRemove(0);
+        pub fn remove(self: *const Self) ?DeferredEvent {
+            if (self.container.items.len > 0) {
+                return self.container.orderedRemove(0);
+            } else {
+                return null;
+            }
         }
     };
 }
@@ -385,22 +403,21 @@ fn StateMachine(
         const Self = @This();
 
         const States = StatesFromTransitions(transitions);
-        const DeferredEvents = TaggedUnion(
-            DeferredEventsFromTransition(transitions).items,
-        );
+        const deferred_events = DeferredEventsFromTransition(transitions).items;
+        const DeferredEvent = TaggedUnion(deferred_events);
 
         regions: Regions(transitions) = initRegions(transitions, States),
         ctx: if (Context == void) void else *Context,
-        deferrer: Deferrer(DeferredEvents, Container),
+        deferrer: Deferrer(deferred_events, Container),
 
-        pub inline fn process(self: *Self, event: anytype) !void {
+        pub inline fn process(self: *Self, event: anytype) anyerror!void {
             _ = try self.detailedProcess(event);
         }
 
-        pub fn detailedProcess(self: *Self, event: anytype) !bool {
+        pub fn detailedProcess(self: *Self, event: anytype) anyerror!bool {
             var processed = false;
 
-            inline for (0.., self.regions) |region, state| {
+            for (0.., self.regions) |region, state| {
                 inline for (transitions) |trans| {
                     if (try self.handleState(trans, event, state) and
                         comptime @hasField(@TypeOf(trans), "dst"))
@@ -408,6 +425,14 @@ fn StateMachine(
                         self.regions[region] = States.index(trans.dst).?;
                         processed = true;
                     }
+                }
+            }
+
+            while (self.deferrer.remove()) |deferred_event| {
+                switch (deferred_event) {
+                    inline else => |payload| {
+                        _ = try self.detailedProcess(payload);
+                    },
                 }
             }
 
@@ -452,8 +477,8 @@ fn StateMachine(
                 }
             }
 
-            if (comptime @hasField(Trans, "actions")) {
-                inline for (trans.actions) |action| {
+            if (comptime @hasField(Trans, "acts")) {
+                inline for (trans.acts) |action| {
                     const info = @typeInfo(@TypeOf(action)).@"fn";
                     const args = switch (info.params.len) {
                         1 => .{self.ctx},
@@ -465,9 +490,9 @@ fn StateMachine(
                     };
 
                     if (comptime hasError(action)) {
-                        try @call(.auto, action, args);
+                        _ = try @call(.auto, action, args);
                     } else {
-                        @call(.auto, action, args);
+                        _ = @call(.auto, action, args);
                     }
                 }
             }
@@ -495,51 +520,84 @@ fn StateMachine(
 test StateMachine {
     const t = std.testing;
 
-    const Context = struct {
+    const Download = struct {
         const Self = @This();
 
-        value: u8,
+        const Done = struct {};
+        const Failed = struct {};
 
-        fn increment(self: *Self) void {
-            self.value += 1;
+        started: bool = false,
+        progress: u8 = 0,
+        random_gen: std.Random.DefaultPrng,
+        result: ?enum { success, failure } = null,
+
+        pub fn init() Self {
+            return .{
+                .random_gen = .init(@intCast(std.time.milliTimestamp())),
+            };
         }
-        fn incrementFail(self: *Self) !void {
-            self.value += 1;
 
-            return error.ShouldFail;
+        fn start(self: *Self) void {
+            self.started = true;
+        }
+
+        fn getMore(self: *Self, _: anytype, deferrer: anytype) !TypeList(.{ Done, Failed }) {
+            self.progress += 1;
+
+            if (self.progress == 100) {
+                if (self.random_gen.random().boolean()) {
+                    self.result = .success;
+                    try deferrer.add(Done{});
+                } else {
+                    self.result = .failure;
+                    try deferrer.add(Failed{});
+                }
+            }
+
+            return .init;
         }
     };
 
-    const S1 = struct {};
-    const S2 = struct {};
+    const Waiting = struct {};
+    const Downloading = struct {};
+    const Success = struct {};
+    const Failure = struct {};
+
+    const Start = struct {};
+    const Resume = struct {};
 
     const SM = State(.{
-        .{ .init = true, .src = S1, .event = u8, .dst = S2, .actions = .{Context.increment} },
-        .{ .src = S1, .event = bool, .dst = S2, .actions = .{Context.incrementFail} },
+        .{ .init = true, .src = Waiting, .event = Start, .acts = .{Download.start}, .dst = Downloading },
 
-        .{ .src = S2, .event = u8, .dst = S1, .actions = .{Context.increment} },
-    }, std.ArrayList);
+        .{ .src = Downloading, .event = Resume, .acts = .{Download.getMore} },
+        .{ .src = Downloading, .event = Download.Done, .dst = Success },
+        .{ .src = Downloading, .event = Download.Failed, .dst = Failure },
+    });
 
-    var context: Context = .{ .value = 0 };
-
-    var container: SM.Container = .init(t.allocator);
+    var container: std.ArrayList(SM.DeferredEvent) = .init(t.allocator);
     defer container.deinit();
 
-    var sm = SM.create(&context, &container);
+    var download: Download = .init();
+    var sm = SM.create(&download, &container);
 
-    try t.expect(sm.is(S1));
+    try t.expect(sm.is(Waiting));
 
-    try sm.process(@as(u8, 1));
-    try t.expect(sm.is(S2));
-    try t.expectEqual(1, context.value);
+    try sm.process(Start{});
+    try t.expect(sm.is(Downloading));
+    try t.expect(download.started);
 
-    try sm.process(@as(u8, 1));
-    try t.expect(sm.is(S1));
-    try t.expectEqual(2, context.value);
+    for (1..100) |i| {
+        try sm.process(Resume{});
+        try t.expect(sm.is(Downloading));
+        try t.expectEqual(i, download.progress);
+    }
 
-    try t.expectEqual(error.ShouldFail, sm.process(true));
-    try t.expect(sm.is(S1));
-    try t.expectEqual(3, context.value);
+    try sm.process(Resume{});
+    try t.expect(null != download.result);
+    switch (download.result.?) {
+        .success => try t.expect(sm.is(Success)),
+        .failure => try t.expect(sm.is(Failure)),
+    }
 }
 
 const std = @import("std");

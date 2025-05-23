@@ -45,14 +45,14 @@ fn @"Traffic light"() void {
     var stopCount: usize = 0;
     var count: Count = .{};
     var sm = hsm.State(.{
-        .{ .init = true, .src = Running, .event = Red, .dst = Stopped, .actions = .{harshStop} },
-        .{ .src = Running, .event = Yellow, .dst = Slowing, .actions = .{slowingDown} },
+        .{ .init = true, .src = Running, .event = Red, .dst = Stopped, .acts = .{harshStop} },
+        .{ .src = Running, .event = Yellow, .dst = Slowing, .acts = .{slowingDown} },
 
-        .{ .src = Slowing, .event = Red, .dst = Stopped, .actions = .{softStop} },
+        .{ .src = Slowing, .event = Red, .dst = Stopped, .acts = .{softStop} },
 
-        .{ .src = Stopped, .event = Green, .dst = Running, .actions = .{starting} },
+        .{ .src = Stopped, .event = Green, .dst = Running, .acts = .{starting} },
 
-        .{ .init = true, .src = Observing, .event = Any, .actions = .{tick} },
+        .{ .init = true, .src = Observing, .event = Any, .acts = .{tick} },
     }).init(.{ &stopCount, &count });
 
     sm.process(Red{});

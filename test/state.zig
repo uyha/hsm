@@ -9,12 +9,12 @@ test "Simple State" {
     const S1 = struct {};
     const S2 = struct {};
 
-    const TestStateMachine = State(.{
+    const StateMachine = State(.{
         .{ .init = true, .src = S1, .event = i32, .dst = S2 },
         .{ .src = S2, .event = i32, .dst = S1 },
     });
 
-    var state_machine = TestStateMachine.init(.{});
+    var state_machine = StateMachine.init(.{});
 
     try testing.expect(state_machine.is(S1));
 
@@ -139,7 +139,7 @@ test "Actions" {
     const S1 = struct {};
 
     const TestStateMachine = State(.{
-        .{ .init = true, .src = S1, .event = bool, .actions = .{increment} },
+        .{ .init = true, .src = S1, .event = bool, .acts = .{increment} },
     });
 
     var value: u32 = 0;
@@ -237,7 +237,7 @@ test "Transition with .src being `Any` state is triggered with the specified eve
         .{ .init = true, .src = S1, .event = bool, .dst = S2 },
         .{ .src = S2, .event = bool, .dst = S1 },
 
-        .{ .src = Any, .event = comptime_float, .dst = S1, .actions = .{increment} },
+        .{ .src = Any, .event = comptime_float, .dst = S1, .acts = .{increment} },
     });
 
     var value: u32 = 0;
@@ -262,7 +262,7 @@ test "`Any` event is triggered with any event" {
     const S1 = struct {};
 
     const TestStateMachine = State(.{
-        .{ .init = true, .src = S1, .event = Any, .actions = .{increment} },
+        .{ .init = true, .src = S1, .event = Any, .acts = .{increment} },
     });
 
     var value: u32 = 0;
@@ -287,7 +287,7 @@ test "An event shall not be further processed once it's already consumed by a tr
 
     const TestStateMachine = State(.{
         .{ .init = true, .src = S1, .event = E1 },
-        .{ .src = S1, .event = E1, .actions = .{increment} },
+        .{ .src = S1, .event = E1, .acts = .{increment} },
     });
 
     var value: u32 = 0;

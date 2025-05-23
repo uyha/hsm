@@ -23,6 +23,8 @@ pub fn TypeList(current: anytype) type {
 
         pub const items = current;
 
+        pub const init: Self = .{};
+
         pub fn append(T: type) @TypeOf(TypeList(Self.items ++ .{T})) {
             return TypeList(Self.items ++ .{T});
         }
