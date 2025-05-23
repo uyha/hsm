@@ -16,7 +16,7 @@ pub fn main() !void {
 
         .{ .src = Slowing, .event = Red, .dst = Stopped, .acts = .{Traffic.softStop} },
 
-        .{ .src = Stopped, .event = Green, .dst = Running, .acts = .{Traffic.start} },
+        .{ .src = Stopped, .event = Green, .guards = .{carBroken}, .dst = Running, .acts = .{Traffic.start} },
 
         .{ .init = true, .src = Observing, .event = Any, .acts = .{Traffic.tick} },
     }).create(&count);
@@ -54,6 +54,11 @@ const Traffic = struct {
         source.ticks += 1;
     }
 };
+
+fn carBroken() bool {
+    var gen = std.Random.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
+    return gen.random().boolean();
+}
 
 const std = @import("std");
 
