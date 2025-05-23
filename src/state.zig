@@ -492,6 +492,7 @@ fn StateMachine(
                 inline for (trans.acts) |action| {
                     const info = @typeInfo(@TypeOf(action)).@"fn";
                     const args = switch (info.params.len) {
+                        0 => .{},
                         1 => .{self.ctx},
                         2 => .{ self.ctx, event },
                         3 => .{ self.ctx, event, self.deferrer },

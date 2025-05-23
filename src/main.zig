@@ -5,33 +5,34 @@ const State = hsm.State;
 const Any = hsm.Any;
 
 pub fn main() !void {
-    @"Traffic light"();
+    try @"Traffic light"();
 }
 
-fn harshStop(count: *usize) void {
-    std.debug.print("Harsh stop\n", .{});
-    count.* += 1;
-}
-fn softStop(count: *usize) void {
-    std.debug.print("Soft stop\n", .{});
-    count.* += 1;
-}
-fn slowingDown() void {
-    std.debug.print("Slowing Down\n", .{});
-}
-fn starting() void {
-    std.debug.print("Starting to run\n", .{});
-}
+const Traffic = struct {
+    stops: usize = 0,
+    ticks: usize = 0,
 
-const Count = struct {
-    count: usize = 0,
+    fn harshStop(count: *Traffic) void {
+        std.debug.print("Harsh stop\n", .{});
+        count.stops += 1;
+    }
+    fn softStop(count: *Traffic) void {
+        std.debug.print("Soft stop\n", .{});
+        count.stops += 1;
+    }
+    fn slowingDown() void {
+        std.debug.print("Slowing Down\n", .{});
+    }
+    fn starting() void {
+        std.debug.print("Starting to run\n", .{});
+    }
+
+    fn tick(source: *Traffic) void {
+        source.ticks += 1;
+    }
 };
 
-fn tick(source: *Count) void {
-    source.count += 1;
-}
-
-fn @"Traffic light"() void {
+fn @"Traffic light"() !void {
     const Red = struct {};
     const Yellow = struct {};
     const Green = struct {};
@@ -42,27 +43,26 @@ fn @"Traffic light"() void {
 
     const Observing = struct {};
 
-    var stopCount: usize = 0;
-    var count: Count = .{};
+    var count: Traffic = .{};
     var sm = hsm.State(.{
-        .{ .init = true, .src = Running, .event = Red, .dst = Stopped, .acts = .{harshStop} },
-        .{ .src = Running, .event = Yellow, .dst = Slowing, .acts = .{slowingDown} },
+        .{ .init = true, .src = Running, .event = Red, .dst = Stopped, .acts = .{Traffic.harshStop} },
+        .{ .src = Running, .event = Yellow, .dst = Slowing, .acts = .{Traffic.slowingDown} },
 
-        .{ .src = Slowing, .event = Red, .dst = Stopped, .acts = .{softStop} },
+        .{ .src = Slowing, .event = Red, .dst = Stopped, .acts = .{Traffic.softStop} },
 
-        .{ .src = Stopped, .event = Green, .dst = Running, .acts = .{starting} },
+        .{ .src = Stopped, .event = Green, .dst = Running, .acts = .{Traffic.starting} },
 
-        .{ .init = true, .src = Observing, .event = Any, .acts = .{tick} },
-    }).init(.{ &stopCount, &count });
+        .{ .init = true, .src = Observing, .event = Any, .acts = .{Traffic.tick} },
+    }).create(&count);
 
-    sm.process(Red{});
-    sm.process(Green{});
-    sm.process(Yellow{});
-    sm.process(Red{});
-    sm.process(Green{});
+    try sm.process(Red{});
+    try sm.process(Green{});
+    try sm.process(Yellow{});
+    try sm.process(Red{});
+    try sm.process(Green{});
 
-    std.debug.print("Stops: {}\n", .{stopCount});
-    std.debug.print("Ticks: {}\n", .{count.count});
+    std.debug.print("Stops: {}\n", .{count.stops});
+    std.debug.print("Ticks: {}\n", .{count.ticks});
 }
 
 fn @"Bootloader to kernel"() void {
