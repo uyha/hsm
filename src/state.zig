@@ -30,7 +30,10 @@ fn CompositeState(comptime transitions: anytype) type {
     return struct {
         pub const States = StatesFromTransitions(transitions);
         pub const deferred_events = DeferredEventsFromTransition(transitions).items;
-        pub const DeferredEvent = if (deferred_events.len == 0) void else TaggedUnion(deferred_events);
+        pub const DeferredEvent = if (deferred_events.len == 0)
+            void
+        else
+            TaggedUnion(deferred_events);
 
         pub const create = if (deferred_events.len == 0)
             createNoContainer
@@ -66,7 +69,10 @@ fn StatesFromTransitions(transitions: anytype) type {
         if (result.index(trans.src) == null) {
             result = result.append(trans.src);
         }
-        if (@hasField(@TypeOf(trans), "dst") and @TypeOf(trans.dst) == type) {
+        if (@hasField(@TypeOf(trans), "dst") and
+            @TypeOf(trans.dst) == type and
+            result.index(trans.dst) == null)
+        {
             result = result.append(trans.dst);
         }
     }
@@ -349,7 +355,7 @@ test TaggedUnion {
     try t.expectEqual(true, (Event{ .@"1" = true }).@"1");
 }
 
-pub fn Deferrer(events: anytype, Container: type) type {
+pub fn DeferrerType(events: anytype, Container: type) type {
     if (events.len == 0) return void;
 
     return struct {
@@ -405,10 +411,11 @@ fn StateMachine(
         const States = StatesFromTransitions(transitions);
         const deferred_events = DeferredEventsFromTransition(transitions).items;
         const DeferredEvent = TaggedUnion(deferred_events);
+        const Deferrer = DeferrerType(deferred_events, Container);
 
         regions: Regions(transitions) = initRegions(transitions, States),
         ctx: if (Context == void) void else *Context,
-        deferrer: Deferrer(deferred_events, Container),
+        deferrer: Deferrer,
 
         pub inline fn process(self: *Self, event: anytype) anyerror!void {
             _ = try self.detailedProcess(event);
