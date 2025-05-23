@@ -424,13 +424,15 @@ fn StateMachine(
         pub fn detailedProcess(self: *Self, event: anytype) anyerror!bool {
             var processed = false;
 
-            for (0.., self.regions) |region, state| {
+            region: for (0.., self.regions) |region, state| {
                 inline for (transitions) |trans| {
                     if (try self.handleState(trans, event, state)) {
                         if (comptime @hasField(@TypeOf(trans), "dst")) {
                             self.regions[region] = States.index(trans.dst).?;
                         }
                         processed = true;
+
+                        continue :region;
                     }
                 }
             }

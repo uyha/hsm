@@ -281,17 +281,21 @@ test "`Any` event is triggered with any event" {
 
 test "An event shall not be further processed once it's already consumed by a transition" {
     const S1 = struct {};
+    const S2 = struct {};
 
     const E1 = struct {};
 
     const TestStateMachine = State(.{
         .{ .init = true, .src = S1, .event = E1 },
         .{ .src = S1, .event = E1, .acts = .{increment} },
+
+        .{ .init = true, .src = S2, .event = E1 },
+        .{ .src = S2, .event = E1, .acts = .{increment} },
     });
 
     var ctx: u32 = 0;
     var state_machine = TestStateMachine.create(&ctx);
 
     try testing.expect(try state_machine.detailedProcess(E1{}));
-    try testing.expectEqual(1, ctx);
+    try testing.expectEqual(0, ctx);
 }
