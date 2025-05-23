@@ -25,7 +25,13 @@
 pub const State = CompositeState;
 
 fn CompositeState(comptime transitions: anytype) type {
-    comptime assertInits(transitions);
+    comptime {
+        if (totalInits(transitions) == 0) {
+            @compileError("At least 1 init transition has to be present");
+        }
+
+        for (transitions) |transition| assertTransition(transition);
+    }
 
     return struct {
         pub const States = StatesFromTransitions(transitions);
@@ -70,7 +76,6 @@ fn StatesFromTransitions(transitions: anytype) type {
             result = result.append(trans.src);
         }
         if (@hasField(@TypeOf(trans), "dst") and
-            @TypeOf(trans.dst) == type and
             result.index(trans.dst) == null)
         {
             result = result.append(trans.dst);
@@ -155,84 +160,10 @@ test DeferredEventsFromTransition {
     try t.expect(Events.index(f32) != null);
 }
 
-fn assertPredicate(Guard: type) void {
-    switch (@typeInfo(Guard)) {
-        .@"fn" => |func| {
-            if (func.return_type != bool) {
-                @compileError(
-                    std.fmt.comptimePrint(
-                        "A predicate has to have its return type being a `bool`, the return type of the function is {} instead",
-                        .{func.return_type.?},
-                    ),
-                );
-            }
-        },
-        else => @compileError(std.fmt.comptimePrint(
-            "A tuple of predicate / predicate pointers is expected, a {} is found inside it",
-            .{Guard},
-        )),
-    }
-}
-
-fn assertGuards(guards: anytype) void {
-    comptime {
-        switch (@typeInfo(@TypeOf(guards))) {
-            .@"struct" => |t| {
-                if (!t.is_tuple) {
-                    @compileError("A tuple of predicates / predicate pointers is expected");
-                }
-
-                for (guards) |guard| {
-                    switch (@typeInfo(@TypeOf(guard))) {
-                        .pointer => |ptr| assertPredicate(ptr.child),
-                        else => assertPredicate(@TypeOf(guard)),
-                    }
-                }
-            },
-            else => |t| @compileError(std.fmt.comptimePrint(
-                "A tuple of predicate pointers is expected, {} was provided",
-                .{t},
-            )),
-        }
-    }
-}
-
-fn assertAction(Action: type) void {
-    switch (@typeInfo(Action)) {
-        .@"fn" => {},
-        else => @compileError(std.fmt.comptimePrint(
-            "A tuple of functions / function pointers is expected, a {} is found inside it",
-            .{Action},
-        )),
-    }
-}
-
-fn assertActions(acts: anytype) void {
-    switch (@typeInfo(@TypeOf(acts))) {
-        .@"struct" => |t| {
-            if (!t.is_tuple) {
-                @compileError("A tuple of functions / function pointers is expected");
-            }
-
-            for (acts) |action| {
-                switch (@typeInfo(@TypeOf(action))) {
-                    .pointer => |ptr| assertAction(ptr.child),
-                    else => assertAction(@TypeOf(action)),
-                }
-            }
-        },
-        else => |t| @compileError(std.fmt.comptimePrint(
-            "A tuple of functions / function pointers is expected, {} was provided",
-            .{t},
-        )),
-    }
-}
-
 fn assertTransition(transition: anytype) void {
     const Transition = @TypeOf(transition);
-    const info = @typeInfo(Transition);
 
-    if (info != .@"struct") {
+    if (@typeInfo(Transition) != .@"struct") {
         @compileError(@typeName(@TypeOf(transition)) ++ " is not a tuple");
     }
 
@@ -261,31 +192,141 @@ fn assertTransition(transition: anytype) void {
     }
 
     if (@hasField(Transition, "guards")) {
-        assertGuards(transition.guards);
+        const guards = transition.guards;
+        const Guards = @TypeOf(guards);
+        switch (@typeInfo(Guards)) {
+            .@"struct" => |t| {
+                if (!t.is_tuple) {
+                    @compileError(comptimePrint(
+                        "A tuple of predicates/predicate pointers is expected, {} is given",
+                        .{Guards},
+                    ));
+                }
+
+                for (guards) |guard| {
+                    const Guard = @TypeOf(guard);
+                    const Func = switch (@typeInfo(Guard)) {
+                        .pointer => |ptr| ptr.child,
+                        .@"fn" => Guard,
+                        else => @compileError(comptimePrint(
+                            "A function/function pointer is expected, {} is given",
+                            .{Guard},
+                        )),
+                    };
+
+                    const func = @typeInfo(Func).@"fn";
+
+                    if (func.return_type.? != bool) {
+                        @compileError(comptimePrint(
+                            "A predicate has to return a `bool`, predicate: {}",
+                            .{Guard},
+                        ));
+                    }
+                    switch (func.params.len) {
+                        0...2 => {},
+                        else => @compileError(comptimePrint(
+                            "A predicate can have at most 2 parameters, predicate: {}",
+                            .{Guard},
+                        )),
+                    }
+                }
+            },
+            else => |t| @compileError(std.fmt.comptimePrint(
+                "A tuple of predicate pointers is expected, {} was provided",
+                .{t},
+            )),
+        }
     }
 
     if (@hasField(Transition, "acts")) {
-        assertActions(transition.acts);
+        const acts = transition.acts;
+        switch (@typeInfo(@TypeOf(acts))) {
+            .@"struct" => |t| {
+                if (!t.is_tuple) {
+                    @compileError("A tuple of functions / function pointers is expected");
+                }
+
+                action: for (acts) |action| {
+                    const Action = @TypeOf(action);
+                    const Func = switch (@typeInfo(Action)) {
+                        .pointer => |ptr| ptr.child,
+                        .@"fn" => Action,
+                        else => @compileError(comptimePrint(
+                            "A function/function pointer is expected, {} is given",
+                            .{Action},
+                        )),
+                    };
+
+                    const func = @typeInfo(Func).@"fn";
+
+                    var ReturnType = func.return_type.?;
+                    const Scope = scope: while (true) {
+                        switch (@typeInfo(ReturnType)) {
+                            .error_union => |info| ReturnType = info.payload,
+                            .@"struct", .@"enum", .@"union" => break :scope ReturnType,
+                            .void => continue :action,
+                            else => @compileError(
+                                "An action cannot return " ++ @typeName(func.return_type.?),
+                            ),
+                        }
+                    };
+
+                    if (!@hasDecl(Scope, "items")) {
+                        @compileError(
+                            @typeName(Scope) ++ " does not have the `items` declaration",
+                        );
+                    }
+
+                    const items = Scope.items;
+                    const Items = @TypeOf(items);
+                    switch (@typeInfo(Items)) {
+                        .@"struct" => |info| if (!info.is_tuple) {
+                            @compileError(
+                                "`items` has to be a tuple of types, not a struct",
+                            );
+                        },
+                        else => @compileError(comptimePrint(
+                            "`items` has to be a tuple of types, not {}",
+                            .{Items},
+                        )),
+                    }
+
+                    inline for (items) |item| {
+                        const Item = @TypeOf(item);
+                        if (Item != type) {
+                            @compileError(comptimePrint(
+                                "`items` contains a non type element: {}",
+                                .{Item},
+                            ));
+                        }
+                    }
+
+                    switch (func.params.len) {
+                        0...3 => {},
+                        else => @compileError(comptimePrint(
+                            "An action can have at most 3 parameters, action: {}",
+                            .{Action},
+                        )),
+                    }
+                }
+            },
+            else => |t| @compileError(std.fmt.comptimePrint(
+                "A tuple of functions / function pointers is expected, {} was provided",
+                .{t},
+            )),
+        }
     }
 }
 
 fn totalInits(transitions: anytype) usize {
     var inits = 0;
     for (transitions) |trans| {
-        assertTransition(trans);
-
         if (@hasField(@TypeOf(trans), "init") and trans.init) {
             inits += 1;
         }
     }
 
     return inits;
-}
-
-fn assertInits(transitions: anytype) void {
-    if (totalInits(transitions) == 0) {
-        @compileError("At least 1 init transition has to be present");
-    }
 }
 
 fn Regions(transitions: anytype) type {
