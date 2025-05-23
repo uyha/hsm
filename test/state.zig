@@ -14,15 +14,15 @@ test "Simple State" {
         .{ .src = S2, .event = i32, .dst = S1 },
     });
 
-    var state_machine = StateMachine.init(.{});
+    var state_machine = StateMachine.create({});
 
     try testing.expect(state_machine.is(S1));
 
-    try testing.expect(!state_machine.detailedProcess(@as(i8, 1)));
-    try testing.expect(state_machine.detailedProcess(@as(i32, 1)));
+    try testing.expect(!try state_machine.detailedProcess(@as(i8, 1)));
+    try testing.expect(try state_machine.detailedProcess(@as(i32, 1)));
 
     try testing.expect(state_machine.is(S2));
-    try testing.expect(state_machine.detailedProcess(@as(i32, 1)));
+    try testing.expect(try state_machine.detailedProcess(@as(i32, 1)));
 
     try testing.expect(state_machine.is(S1));
 }
@@ -47,32 +47,32 @@ test "Crossing events" {
         .{ .src = S3, .event = E2, .dst = S2 },
     });
 
-    var state_machine = TestStateMachine.init(.{});
+    var state_machine = TestStateMachine.create({});
 
     try testing.expect(state_machine.is(S1));
 
-    try testing.expect(!state_machine.detailedProcess(E1{}));
-    try testing.expect(state_machine.detailedProcess(E2{}));
+    try testing.expect(!try state_machine.detailedProcess(E1{}));
+    try testing.expect(try state_machine.detailedProcess(E2{}));
     try testing.expect(state_machine.is(S2));
 
-    try testing.expect(!state_machine.detailedProcess(E2{}));
-    try testing.expect(state_machine.detailedProcess(E3{}));
+    try testing.expect(!try state_machine.detailedProcess(E2{}));
+    try testing.expect(try state_machine.detailedProcess(E3{}));
     try testing.expect(state_machine.is(S3));
 
-    try testing.expect(!state_machine.detailedProcess(E3{}));
-    try testing.expect(state_machine.detailedProcess(E2{}));
+    try testing.expect(!try state_machine.detailedProcess(E3{}));
+    try testing.expect(try state_machine.detailedProcess(E2{}));
     try testing.expect(state_machine.is(S2));
 }
 
 const Event = struct {
     value: u32,
 
-    pub fn isEven(self: Event) bool {
+    pub fn isEven(_: void, self: Event) bool {
         return @rem(self.value, 2) == 0;
     }
 };
 
-fn isEven(value: u32) bool {
+fn isEven(_: void, value: u32) bool {
     return @rem(value, 2) == 0;
 }
 
@@ -85,24 +85,24 @@ test "Guarded transitions" {
         .{ .src = S2, .event = u32, .dst = S1, .guards = .{isEven} },
     });
 
-    var state_machine = TestStateMachine.init(.{});
+    var state_machine = TestStateMachine.create({});
 
     try testing.expect(state_machine.is(S1));
 
-    try testing.expect(!state_machine.detailedProcess(Event{ .value = 1 }));
-    try testing.expect(state_machine.detailedProcess(Event{ .value = 2 }));
+    try testing.expect(!try state_machine.detailedProcess(Event{ .value = 1 }));
+    try testing.expect(try state_machine.detailedProcess(Event{ .value = 2 }));
     try testing.expect(state_machine.is(S2));
 
-    try testing.expect(!state_machine.detailedProcess(@as(u32, 1)));
-    try testing.expect(state_machine.detailedProcess(@as(u32, 2)));
+    try testing.expect(!try state_machine.detailedProcess(@as(u32, 1)));
+    try testing.expect(try state_machine.detailedProcess(@as(u32, 2)));
     try testing.expect(state_machine.is(S1));
 }
 
-fn isMutablePointerEven(value: *u32) bool {
-    return @rem(value.*, 2) == 0;
+fn isMutablePointerEven(ctx: *u32) bool {
+    return @rem(ctx.*, 2) == 0;
 }
 
-test "Resources" {
+test "With context" {
     const S1 = struct {};
     const S2 = struct {};
     const E1 = struct {};
@@ -112,18 +112,18 @@ test "Resources" {
         .{ .src = S2, .event = E1, .dst = S1 },
     });
 
-    var resource: u32 = 1;
+    var context: u32 = 1;
 
-    var state_machine = TestStateMachine.init(.{&resource});
-
-    try testing.expect(state_machine.is(S1));
-    try testing.expect(!state_machine.detailedProcess(E1{}));
+    var state_machine = TestStateMachine.create(&context);
 
     try testing.expect(state_machine.is(S1));
+    try testing.expect(!try state_machine.detailedProcess(E1{}));
 
-    resource = 2;
+    try testing.expect(state_machine.is(S1));
 
-    try testing.expect(state_machine.detailedProcess(E1{}));
+    context = 2;
+
+    try testing.expect(try state_machine.detailedProcess(E1{}));
     try testing.expect(state_machine.is(S2));
 }
 
@@ -142,17 +142,17 @@ test "Actions" {
         .{ .init = true, .src = S1, .event = bool, .acts = .{increment} },
     });
 
-    var value: u32 = 0;
+    var ctx: u32 = 0;
 
-    var state_machine = TestStateMachine.init(.{&value});
+    var state_machine = TestStateMachine.create(&ctx);
 
     try testing.expect(state_machine.is(S1));
 
-    try testing.expect(state_machine.detailedProcess(true));
-    try testing.expectEqual(1, value);
+    try testing.expect(try state_machine.detailedProcess(true));
+    try testing.expectEqual(1, ctx);
 
-    try testing.expect(state_machine.detailedProcess(false));
-    try testing.expectEqual(2, value);
+    try testing.expect(try state_machine.detailedProcess(false));
+    try testing.expectEqual(2, ctx);
 }
 
 test "Multiple regions" {
@@ -170,23 +170,23 @@ test "Multiple regions" {
         .{ .src = @"S2.2", .event = E2, .dst = @"S2.1" },
     });
 
-    var state_machine = TestStateMachine.init(.{});
+    var state_machine = TestStateMachine.create({});
     try testing.expect(state_machine.is(@"S1.1"));
     try testing.expect(state_machine.is(@"S2.1"));
 
-    try testing.expect(state_machine.detailedProcess(E1{}));
+    try testing.expect(try state_machine.detailedProcess(E1{}));
     try testing.expect(state_machine.is(@"S1.2"));
     try testing.expect(state_machine.is(@"S2.1"));
 
-    try testing.expect(state_machine.detailedProcess(E2{}));
+    try testing.expect(try state_machine.detailedProcess(E2{}));
     try testing.expect(state_machine.is(@"S1.2"));
     try testing.expect(state_machine.is(@"S2.2"));
 
-    try testing.expect(state_machine.detailedProcess(E2{}));
+    try testing.expect(try state_machine.detailedProcess(E2{}));
     try testing.expect(state_machine.is(@"S1.2"));
     try testing.expect(state_machine.is(@"S2.1"));
 
-    try testing.expect(state_machine.detailedProcess(E1{}));
+    try testing.expect(try state_machine.detailedProcess(E1{}));
     try testing.expect(state_machine.is(@"S1.1"));
     try testing.expect(state_machine.is(@"S2.1"));
 }
@@ -212,19 +212,19 @@ test "Multiple regions with shared event" {
         .{ .src = @"S2.2", .event = E3, .dst = @"S2.1" },
     });
 
-    var state_machine = TestStateMachine.init(.{});
+    var state_machine = TestStateMachine.create({});
     try testing.expect(state_machine.is(@"S1.1"));
     try testing.expect(state_machine.is(@"S2.1"));
 
-    try testing.expect(state_machine.detailedProcess(E1{}));
+    try testing.expect(try state_machine.detailedProcess(E1{}));
     try testing.expect(state_machine.is(@"S1.2"));
     try testing.expect(state_machine.is(@"S2.1"));
 
-    try testing.expect(state_machine.detailedProcess(E2{}));
+    try testing.expect(try state_machine.detailedProcess(E2{}));
     try testing.expect(state_machine.is(@"S1.2"));
     try testing.expect(state_machine.is(@"S2.2"));
 
-    try testing.expect(state_machine.detailedProcess(E3{}));
+    try testing.expect(try state_machine.detailedProcess(E3{}));
     try testing.expect(state_machine.is(@"S1.1"));
     try testing.expect(state_machine.is(@"S2.1"));
 }
@@ -240,21 +240,21 @@ test "Transition with .src being `Any` state is triggered with the specified eve
         .{ .src = Any, .event = comptime_float, .dst = S1, .acts = .{increment} },
     });
 
-    var value: u32 = 0;
-    var state_machine = TestStateMachine.init(.{&value});
+    var ctx: u32 = 0;
+    var state_machine = TestStateMachine.create(&ctx);
 
     try testing.expect(state_machine.is(S1));
 
-    try testing.expect(state_machine.detailedProcess(true));
-    try testing.expectEqual(0, value);
+    try testing.expect(try state_machine.detailedProcess(true));
+    try testing.expectEqual(0, ctx);
     try testing.expect(state_machine.is(S2));
 
-    try testing.expect(state_machine.detailedProcess(0.0));
-    try testing.expectEqual(1, value);
+    try testing.expect(try state_machine.detailedProcess(0.0));
+    try testing.expectEqual(1, ctx);
     try testing.expect(state_machine.is(S1));
 
-    try testing.expect(state_machine.detailedProcess(0.0));
-    try testing.expectEqual(2, value);
+    try testing.expect(try state_machine.detailedProcess(0.0));
+    try testing.expectEqual(2, ctx);
     try testing.expect(state_machine.is(S1));
 }
 
@@ -265,23 +265,22 @@ test "`Any` event is triggered with any event" {
         .{ .init = true, .src = S1, .event = Any, .acts = .{increment} },
     });
 
-    var value: u32 = 0;
-    var state_machine = TestStateMachine.init(.{&value});
+    var ctx: u32 = 0;
+    var state_machine = TestStateMachine.create(&ctx);
 
     try testing.expect(state_machine.is(S1));
-    try testing.expect(state_machine.detailedProcess(1));
-    try testing.expectEqual(1, value);
-    try testing.expect(state_machine.detailedProcess(1.0));
-    try testing.expectEqual(2, value);
-    try testing.expect(state_machine.detailedProcess(true));
-    try testing.expectEqual(3, value);
-    try testing.expect(state_machine.detailedProcess(""));
-    try testing.expectEqual(4, value);
+    try testing.expect(try state_machine.detailedProcess(1));
+    try testing.expectEqual(1, ctx);
+    try testing.expect(try state_machine.detailedProcess(1.0));
+    try testing.expectEqual(2, ctx);
+    try testing.expect(try state_machine.detailedProcess(true));
+    try testing.expectEqual(3, ctx);
+    try testing.expect(try state_machine.detailedProcess(""));
+    try testing.expectEqual(4, ctx);
 }
 
 test "An event shall not be further processed once it's already consumed by a transition" {
     const S1 = struct {};
-    // const S2 = struct {};
 
     const E1 = struct {};
 
@@ -290,9 +289,9 @@ test "An event shall not be further processed once it's already consumed by a tr
         .{ .src = S1, .event = E1, .acts = .{increment} },
     });
 
-    var value: u32 = 0;
-    var state_machine = TestStateMachine.init(.{&value});
+    var ctx: u32 = 0;
+    var state_machine = TestStateMachine.create(&ctx);
 
-    try testing.expect(state_machine.detailedProcess(E1{}));
-    try testing.expectEqual(0, value);
+    try testing.expect(try state_machine.detailedProcess(E1{}));
+    try testing.expectEqual(1, ctx);
 }

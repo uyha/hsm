@@ -1,7 +1,7 @@
 const state = @import("state.zig");
 
 comptime {
-    // const testing = @import("std").testing;
+    const t = @import("std").testing;
 
-    // testing.refAllDecls(state);
+    t.refAllDecls(state);
 }
