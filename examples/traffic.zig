@@ -1,35 +1,4 @@
-const State = hsm.State;
-const Any = hsm.Any;
-
 pub fn main() !void {
-    try @"Traffic light"();
-}
-
-const Traffic = struct {
-    stops: usize = 0,
-    ticks: usize = 0,
-
-    fn harshStop(count: *Traffic) void {
-        std.debug.print("Harsh stop\n", .{});
-        count.stops += 1;
-    }
-    fn softStop(count: *Traffic) void {
-        std.debug.print("Soft stop\n", .{});
-        count.stops += 1;
-    }
-    fn slowingDown() void {
-        std.debug.print("Slowing Down\n", .{});
-    }
-    fn starting() void {
-        std.debug.print("Starting to run\n", .{});
-    }
-
-    fn tick(source: *Traffic) void {
-        source.ticks += 1;
-    }
-};
-
-fn @"Traffic light"() !void {
     const Red = struct {};
     const Yellow = struct {};
     const Green = struct {};
@@ -43,11 +12,11 @@ fn @"Traffic light"() !void {
     var count: Traffic = .{};
     var sm = hsm.State(.{
         .{ .init = true, .src = Running, .event = Red, .dst = Stopped, .acts = .{Traffic.harshStop} },
-        .{ .src = Running, .event = Yellow, .dst = Slowing, .acts = .{Traffic.slowingDown} },
+        .{ .src = Running, .event = Yellow, .dst = Slowing, .acts = .{Traffic.slowDown} },
 
         .{ .src = Slowing, .event = Red, .dst = Stopped, .acts = .{Traffic.softStop} },
 
-        .{ .src = Stopped, .event = Green, .dst = Running, .acts = .{Traffic.starting} },
+        .{ .src = Stopped, .event = Green, .dst = Running, .acts = .{Traffic.start} },
 
         .{ .init = true, .src = Observing, .event = Any, .acts = .{Traffic.tick} },
     }).create(&count);
@@ -62,5 +31,32 @@ fn @"Traffic light"() !void {
     std.debug.print("Ticks: {}\n", .{count.ticks});
 }
 
+const Traffic = struct {
+    stops: usize = 0,
+    ticks: usize = 0,
+
+    fn harshStop(count: *Traffic) void {
+        std.debug.print("Harsh stop\n", .{});
+        count.stops += 1;
+    }
+    fn softStop(count: *Traffic) void {
+        std.debug.print("Soft stop\n", .{});
+        count.stops += 1;
+    }
+    fn slowDown() void {
+        std.debug.print("Slowing Down\n", .{});
+    }
+    fn start() void {
+        std.debug.print("Starting to run\n", .{});
+    }
+
+    fn tick(source: *Traffic) void {
+        source.ticks += 1;
+    }
+};
+
 const std = @import("std");
+
 const hsm = @import("hsm");
+const State = hsm.State;
+const Any = hsm.Any;
