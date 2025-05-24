@@ -1,25 +1,39 @@
 /// A State has to be initialized with a tuple of transitions.
 ///
 /// A transition is a tuple that has the following fields
-///   - `.init`: bool (Optional)
-///   - `.src`: type
-///   - `.event`: type (Optional)
-///   - `.dst`: type (Optional)
-///   - `.guards`: A tuple of guards (Optional). A guard is a function or
-///     function pointer with the following signature:
-///     `fn (ctx: Context, event: anytype) bool`.
-///   - `.acts`: A tuple of acts (Optional). An action is a function or
-///     function pointer with the following signatures:
-///     - If there is no deferred event:
-///       `fn (ctx: *Context, event: anytype) !void`
-///     - Otherwise:
-///       `fn (ctx: *Context, event: anytype, deferrer: anytype) !Events`
+/// - `.init`: bool (Optional)
+/// - `.src`: type
+/// - `.event`: type (Optional)
+/// - `.dst`: type (Optional)
+/// - `.guards`: A tuple of guards (Optional). A guard is a function or
+///   function pointer with the following signature:
+///   - `fn () bool`.
+///   - `fn (ctx: *Context) bool`.
+///   - `fn (ctx: *Context, event: Event) bool`.
+/// - `.acts`: A tuple of actions (Optional). An action is a function or
+///   function pointer with the following signatures:
+///   - `fn () ActResult`
+///   - `fn (ctx: *Context) ActResult`
+///   - `fn (ctx: *Context, event: Event) ActResult`
+///   - `fn (ctx: *Context, event: Event, deferrer: Deferrer) ActResult`
 ///
-/// - `Context` is the type of the variable being passed to the `.init` function.
-/// - `Events` is either `void` or a type whose has an `items` declaration that
-///   is a tuple of types.
-/// - `Later` is struct that has an `add` function that accepts all instances of
-///   types returned by `acts` in all the transitions.
+/// - `Context` is the type of the variable being passed to the `.init`
+///   function.
+/// - `Event` is the type of the event passed to the state machine. If the
+///   guard or action is expected to be used with different events, `Event`
+///   should be `anytype`. Otherwise, `Event` can be the type of the expected
+///   event.
+/// - `Deferrer` is a type that can be called `deferrer.add(event)` to defer an
+///   event which will be processed after the event passed directly to the state
+///   machine is processed. The order of processing when there are multiple
+///   deferred events depends container type passed in the `create` function.
+///   This is only available if deferred events are declared by actions via the
+///   return type `ActResult`. Otherwise, `deferrer` is void.
+/// - `ActResult` can either be an error union or a scope `T` (struct, enum, or
+///   union).
+///   - `T` has to have a declaration `items` that is a tuple of types.
+///   - If `ActResult` is an error union, its payload is subjected to the
+///     same requirement of `T`.
 ///
 /// At least 1 transition has to have `.init` being `true`.
 pub const State = CompositeState;
@@ -77,8 +91,8 @@ fn StateMachine(
 
         const States = StatesFromTransitions(transitions);
         const deferred_events = DeferredEventsFromTransition(transitions).items;
-        const DeferredEvent = TaggedUnion(deferred_events);
-        const Deferrer = DeferrerType(deferred_events, Container);
+        pub const DeferredEvent = TaggedUnion(deferred_events);
+        pub const Deferrer = DeferrerType(deferred_events, Container);
 
         regions: Regions(transitions) = initRegions(transitions, States),
         ctx: if (Context == void) void else *Context,
@@ -334,7 +348,7 @@ fn assertTransition(transition: anytype) void {
             .@"struct" => |t| {
                 if (!t.is_tuple) {
                     @compileError(comptimePrint(
-                        "A tuple of predicates/predicate pointers is expected, {} is given",
+                        "A tuple of guards/guard pointers is expected, {} is given",
                         .{Guards},
                     ));
                 }
@@ -354,21 +368,21 @@ fn assertTransition(transition: anytype) void {
 
                     if (func.return_type.? != bool) {
                         @compileError(comptimePrint(
-                            "A predicate has to return a `bool`, predicate: {}",
+                            "A guard has to return a `bool`, guard: {}",
                             .{Guard},
                         ));
                     }
                     switch (func.params.len) {
                         0...2 => {},
                         else => @compileError(comptimePrint(
-                            "A predicate can have at most 2 parameters, predicate: {}",
+                            "A guard can have at most 2 parameters, guard: {}",
                             .{Guard},
                         )),
                     }
                 }
             },
             else => |t| @compileError(std.fmt.comptimePrint(
-                "A tuple of predicate pointers is expected, {} was provided",
+                "A tuple of guard pointers is expected, {} was provided",
                 .{t},
             )),
         }
