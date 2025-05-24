@@ -1,20 +1,16 @@
 pub fn TypeList(current: anytype) type {
     comptime {
-        switch (@typeInfo(@TypeOf(current))) {
-            .@"struct" => |t| {
-                if (!t.is_tuple) {
-                    @compileError("`current` must be a tuple of types");
-                }
-                for (t.fields) |field| {
-                    if (field.type != type) {
-                        @compileError(std.fmt.comptimePrint(
-                            "Field {s} must be a type, but it is {}\n",
-                            .{ field.name, field.type },
-                        ));
-                    }
-                }
-            },
-            else => @compileError("`current` must be a tuple of types"),
+        const info = @typeInfo(@TypeOf(current)).@"struct";
+        if (!info.is_tuple) {
+            @compileError("`current` must be a tuple of types");
+        }
+        for (info.fields) |field| {
+            if (field.type != type) {
+                @compileError(std.fmt.comptimePrint(
+                    "Field {s} must be a type, not {}\n",
+                    .{ field.name, field.type },
+                ));
+            }
         }
     }
 
