@@ -12,10 +12,12 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(lib);
 
-    inline for (.{"traffic"}) |example| {
+    inline for (.{"traffic"}) |name| {
         const exe = b.addExecutable(.{
-            .name = example,
-            .root_source_file = b.path("examples/" ++ example ++ ".zig"),
+            .name = name,
+            .root_source_file = b.path(
+                b.pathJoin(&.{ "examples", name ++ ".zig" }),
+            ),
             .target = target,
             .optimize = optimize,
         });
@@ -30,10 +32,7 @@ pub fn build(b: *std.Build) void {
             run_cmd.addArgs(args);
         }
 
-        const run_step = b.step(
-            "run-" ++ example,
-            "Run " ++ example ++ "example",
-        );
+        const run_step = b.step(name, "Run " ++ name ++ "example");
         run_step.dependOn(&run_cmd.step);
     }
 
