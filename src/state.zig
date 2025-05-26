@@ -36,9 +36,7 @@
 ///     same requirement of `T`.
 ///
 /// At least 1 transition has to have `.init` being `true`.
-pub const State = CompositeState;
-
-fn CompositeState(comptime transitions: anytype) type {
+pub fn StateMachine(comptime transitions: anytype) type {
     comptime {
         if (totalInits(transitions) == 0) {
             @compileError("At least 1 init transition has to be present");
@@ -63,7 +61,7 @@ fn CompositeState(comptime transitions: anytype) type {
         fn createWithDeferContainer(
             ctx: anytype,
             container: anytype,
-        ) StateMachine(
+        ) ConcreteStateMachine(
             transitions,
             if (@TypeOf(ctx) == void) void else std.meta.Child(@TypeOf(ctx)),
             std.meta.Child(@TypeOf(container)),
@@ -71,7 +69,7 @@ fn CompositeState(comptime transitions: anytype) type {
             return .{ .ctx = ctx, .deferrer = .init(container) };
         }
 
-        fn createNoContainer(ctx: anytype) StateMachine(
+        fn createNoContainer(ctx: anytype) ConcreteStateMachine(
             transitions,
             if (@TypeOf(ctx) == void) void else std.meta.Child(@TypeOf(ctx)),
             void,
@@ -81,7 +79,7 @@ fn CompositeState(comptime transitions: anytype) type {
     };
 }
 
-fn StateMachine(
+fn ConcreteStateMachine(
     comptime transitions: anytype,
     Context: type,
     Container: type,
@@ -581,7 +579,7 @@ pub fn DeferrerType(events: anytype, Container: type) type {
     };
 }
 
-test StateMachine {
+test ConcreteStateMachine {
     const t = std.testing;
 
     const Download = struct {
@@ -638,7 +636,7 @@ test StateMachine {
     const Resume = struct {};
     const Abort = struct {};
 
-    const SM = State(.{
+    const SM = StateMachine(.{
         .{ .init = true, .src = Waiting, .event = Start, .acts = .{Download.start}, .dst = Downloading },
 
         .{ .src = Downloading, .event = Resume, .acts = .{Download.getMore} },

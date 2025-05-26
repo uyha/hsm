@@ -10,7 +10,7 @@ pub fn main() !void {
     const Observing = struct {};
 
     var count: Traffic = .{};
-    var sm = hsm.State(.{
+    var sm = hsm.StateMachine(.{
         .{ .init = true, .src = Running, .event = Red, .dst = Stopped, .acts = .{Traffic.harshStop} },
         .{ .src = Running, .event = Yellow, .dst = Slowing, .acts = .{Traffic.slowDown} },
 
@@ -63,5 +63,5 @@ fn carBroken() bool {
 const std = @import("std");
 
 const hsm = @import("hsm");
-const State = hsm.State;
+const StateMachine = hsm.StateMachine;
 const Any = hsm.Any;

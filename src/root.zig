@@ -4,7 +4,7 @@ pub const TypeList = type_list.TypeList;
 pub const Any = struct {};
 
 const state = @import("state.zig");
-pub const State = state.State;
+pub const StateMachine = state.StateMachine;
 
 comptime {
     const testing = @import("std").testing;
