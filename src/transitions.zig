@@ -1,7 +1,4 @@
 pub fn Transitions(transitions: anytype) type {
-    const Self = @TypeOf(transitions);
-    _ = &Self;
-
     return struct {
         pub fn initCount() usize {
             return comptime result: {
