@@ -209,8 +209,6 @@ fn StateMachine(
         }
     };
 }
-pub const Any = struct {};
-
 fn hasError(func: anytype) bool {
     const Func = @TypeOf(func);
     switch (@typeInfo(@typeInfo(Func).@"fn".return_type.?)) {
@@ -685,3 +683,4 @@ const comptimePrint = std.fmt.comptimePrint;
 
 const hsm = @import("root.zig");
 const TypeList = hsm.TypeList;
+const Any = hsm.Any;
