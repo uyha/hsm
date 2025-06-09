@@ -59,4 +59,30 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_lib_unit_tests.step);
     test_step.dependOn(&run_end_to_end_tests.step);
+
+    const docs = b.addInstallDirectory(.{
+        .install_dir = .prefix,
+        .install_subdir = "docs",
+        .source_dir = lib.getEmittedDocs(),
+    });
+    const docs_step = b.step("docs", "Emit documentation");
+    docs_step.dependOn(&docs.step);
+
+    const format = b.addFmt(.{
+        .check = true,
+        .paths = &.{
+            "src/",
+            "examples/",
+            "test/",
+            "build.zig",
+            "build.zig.zon",
+        },
+    });
+    const format_step = b.step("fmt", "Format project");
+    format_step.dependOn(&format.step);
+
+    const all = b.step("all", "Run all steps");
+    all.dependOn(test_step);
+    all.dependOn(docs_step);
+    all.dependOn(format_step);
 }
